@@ -1652,6 +1652,8 @@ void initGridSize(QcuGrid_t* grid, QcuParam* p_param, void* gauge, void* fermion
 
 __attribute__((constructor)) void initialize_mpi() {
   mpi_comm = nullptr;
+  printf(RED"constructor\n");
+  printf(CLR"");
 }
 __attribute__((destructor)) void destroySpace_mpi() {
   delete mpi_comm;

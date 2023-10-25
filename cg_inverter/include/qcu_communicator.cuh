@@ -72,7 +72,7 @@ public:
     allocateBuffer();
     calculateAdjacentProcess();
     allocateGaugeBuffer();
-    prepareGauge();
+    // prepareGauge();
   }
   ~MPICommunicator() {
     // freeBuffer();
@@ -92,7 +92,7 @@ public:
     allocateBuffer();
     calculateAdjacentProcess();
     allocateGaugeBuffer();
-    prepareGauge();
+    // prepareGauge();
   }
 
 

@@ -115,7 +115,10 @@ bool if_converge(void* b_vec, void* x_vec, void* res_vec, void* partial_vec, voi
   if (diff < 1e-15) {
     res = true;
   }
+#ifdef DEBUG
   printf("difference = %.9lf\n", diff);
+#endif
+
   return res;
 }
 
@@ -136,7 +139,9 @@ bool if_converge(void* r_vec, int vol) {
   if (diff < 1e-15) {
     res = true;
   }
+#ifdef DEBUG
   printf("difference = %.9lf\n", diff);
+#endif
   return res;
 }
 
@@ -255,10 +260,8 @@ cg_free:
 }
 
 // CG inverter
-
+// Ax = b , want x
 void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
-
-
 
   // Dslash x = b  ----->  Dslash^\dagger Dslash x = Dslash^\dagger b
   int Lx = param->lattice_size[0];
@@ -267,7 +270,6 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   int Lt = param->lattice_size[3];
   int vol = Lx * Ly * Lz * Lt;
   int max_iterator = vol;
-  // int max_iterator = 100;
   Complex coeff(-1, 0);
   void* d_new_b;
   bool cg_res = false;
@@ -275,15 +277,17 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   void* r_vec;
   void* temp_vec1;
   void* temp_vec2;
-  // void* temp_vec3;
   void* res_vec;
   void* d_coeff;
 
 #ifdef DEBUG
   void* debug_ptr;
+  void* debug_b_ptr;
   checkCudaErrors(cudaMalloc(&debug_ptr, sizeof(Complex) * vol * Ns * Nc));
+  checkCudaErrors(cudaMalloc(&debug_b_ptr, sizeof(Complex) * vol * Ns * Nc));
+
   // use this to debug
-  fullCloverDslashOneRound (b_vector, x_vector, gauge, param, 0);  // b <- Dslash x
+  fullCloverDslashOneRound (debug_b_ptr, b_vector, gauge, param, 0);  // b <- Dslash x
   printf(CLR"");
 #endif
 
@@ -304,8 +308,11 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
 
 
   clearVector(x_vector, vol);   // x <- 0
+#ifdef DEBUG
+  fullCloverDslashOneRound (d_new_b, debug_b_ptr, gauge, param, 1);
+#else
   fullCloverDslashOneRound (d_new_b, b_vector, gauge, param, 1);  // new_b <- Dslash_dagger b
-
+#endif
 
   // r = b - Ax
   MmV_one_round (temp_vec1, x_vector, gauge, param);// D dagger D x ---> temp_vec1 (Ax)
@@ -345,6 +352,8 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
     printf("cg_failed!!!\n");
   }
 
+
+
 cg_inverter_free:
   checkCudaErrors(cudaFree(d_new_b));
 
@@ -359,6 +368,7 @@ cg_inverter_free:
 
 #ifdef DEBUG
   checkCudaErrors(cudaFree(debug_ptr));
+  checkCudaErrors(cudaFree(debug_b_ptr));
 #endif
 }
 

@@ -789,7 +789,10 @@ CloverDslash::CloverDslash(DslashParam& param) : Dslash(param){
     checkCudaErrors(cudaMalloc(&invert_matrix, sizeof(Complex) * Ns * Nc * Ns * Nc / 2 * Lx * Ly * Lz * Lt));
     clover_allocated = true;
   }
+
   if (!clover_prepared) {
+    mpi_comm->prepareGauge();
+
     void* origin_gauge = dslashParam_->gauge;
     Complex** shift_gauge = mpi_comm->getShiftGauge();
     Complex** shift_shift_gauge = mpi_comm->getShiftShiftGauge();
@@ -816,6 +819,7 @@ CloverDslash::CloverDslash(DslashParam& param) : Dslash(param){
     } else {
       clover_prepared = true;
     }
+    mpi_comm->freeGaugeBuffer();
   }
 }
 
@@ -946,6 +950,15 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
 
   // Dslash when invert_flag is 0, else if 1---->Dslash dagger
   for (int parity = 0; parity < 2; parity++) {
+    // if (invert_flag == 0) {
+    //   void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
+    //   void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
+    //   callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
+    // } else {
+    //   void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + parity * half_vol * Ns * Nc);
+    //   void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + (1 - parity) * half_vol * Ns * Nc);
+    //   callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
+    // }
     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
     callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);

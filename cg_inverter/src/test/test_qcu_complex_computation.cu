@@ -85,7 +85,7 @@ static void test_inner_product() {
 
   checkCudaErrors(cudaMemcpy(h_a, d_a, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(h_b, d_b, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost));
-
+  //void gpu_inner_product (void* x, void* y, void* result, int vol);
   gpu_inner_product(d_a, d_b, static_cast<void*>(gpu_result), partial_result, vol);
   inner_product_cpu(h_a, h_b, static_cast<void*>(&h_cpu_result), vol);
   checkCudaErrors(cudaMemcpy(&h_gpu_result, gpu_result, sizeof(Complex), cudaMemcpyDeviceToHost));

@@ -1,5 +1,5 @@
 #pragma once
-
+#include "qcu.h"
 // host class
 struct DslashParam {
   int Lx;
@@ -29,4 +29,13 @@ struct DslashParam {
     // mpi_comm->calculateAdjacentProcess();
     return *this;
   }
+};
+
+// host class
+class Dslash {
+protected:
+  DslashParam *dslashParam_;
+public:
+  Dslash(DslashParam& param) : dslashParam_(&param){}
+  virtual void calculateDslash(int invert_flag) = 0;
 };

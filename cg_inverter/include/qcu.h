@@ -14,8 +14,8 @@ typedef struct QcuGrid_t {
 void initGridSize(QcuGrid_t* grid, QcuParam* p_param, void* gauge, void* fermion_in, void* fermion_out);
 void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity);
 
-// TODO
-void cg_inverter();
+void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param);
+
 #ifdef __cplusplus
 }
 #endif

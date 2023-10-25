@@ -6,6 +6,18 @@
 
 #define DEBUG
 
+// DESCRIBE：  x = ax
+static __global__ void sclar_multiply_vector_gpu (void* x, void* a, int vol) {
+  // a : complex
+  int pos = blockIdx.x * blockDim.x + threadIdx.x;  // thread pos in total
+  Complex scalar = *(static_cast<Complex*>(a));
+
+  Complex* x_dst = static_cast<Complex*>(x) + pos * Ns * Nc;
+
+  for (int i = 0; i < Ns * Nc; i++) {
+    x_dst[i] = scalar * x_dst[i];
+  }
+}
 
 // FUNCTION: saxpy_gpu
 // DESCRIBE：  y = ax + y，vol is Lx * Ly * Lz * Lt
@@ -14,21 +26,17 @@ static __global__ void saxpy_gpu (void* y, void* x, void* a, int vol) {
   int pos = blockIdx.x * blockDim.x + threadIdx.x;  // thread pos in total
   Complex scalar = *(static_cast<Complex*>(a));
 
-  Complex y_local[Ns * Nc];
-  Complex x_local[Ns * Nc];
-  
   Complex* y_dst = static_cast<Complex*>(y) + pos * Ns * Nc;
   Complex* x_dst = static_cast<Complex*>(x) + pos * Ns * Nc;
 
+// #ifdef DEBUG
+//   if (pos == 0) {
+//     printf("before real = %lf, imag = %lf\nafter real = %lf imag = %lf\n", y_dst[0].real(), y_dst[0].imag(), (y_dst[0] + x_dst[0] * scalar).real(), (y_dst[0] + x_dst[0] * scalar).imag());
+//   }
+// #endif
+
   for (int i = 0; i < Ns * Nc; i++) {
-    y_local[i] = y_dst[i];
-    x_local[i] = x_dst[i];
-  }
-  for (int i = 0; i < Ns * Nc; i++) {
-    y_local[i] += x_local[i] * scalar;
-  }
-  for (int i = 0; i < Ns * Nc; i++) {
-    y_dst[i] = y_local[i];
+    y_dst[i] += x_dst[i] * scalar;
   }
 }
 
@@ -42,7 +50,8 @@ static __global__ void partial_product_kernel(void* x, void* y, void* partial_re
   __shared__ Complex cache[BLOCK_SIZE];
 
   for (int i = thread_in_total; i < vol * Ns * Nc; i += vol) {
-    temp += (*(static_cast<Complex*>(x) + i)) * (*(static_cast<Complex*>(y) + i));
+    // temp += (*(static_cast<Complex*>(x) + i)) * (*(static_cast<Complex*>(y) + i));
+    temp += (*(static_cast<Complex*>(x) + i)).conj() * (*(static_cast<Complex*>(y) + i));
   }
   cache[thread_in_block] = temp;
   __syncthreads();
@@ -61,6 +70,8 @@ static __global__ void partial_product_kernel(void* x, void* y, void* partial_re
     *(static_cast<Complex*>(partial_result) + blockIdx.x) = cache[0];
   }
 }
+
+
 
 // when call this function, set gridDim to 1
 static __global__ void reduce_partial_result(void* partial_result, int partial_length) {
@@ -106,21 +117,12 @@ void gpu_inner_product (void* x, void* y, void* result, void* partial_result, in
   checkCudaErrors(cudaMemcpy(result, partial_result, sizeof(Complex), cudaMemcpyDeviceToDevice));
 }
 
-// void gpu_inner_product (void* x, void* y, void* result, int vol) {
-//   void* partial_result;
-//   // int vector_length = vol * Ns * Nc;
-
-//   int grid_size = vol / BLOCK_SIZE;
-//   int block_size = BLOCK_SIZE;
-
-//   checkCudaErrors(cudaMalloc(&partial_result, sizeof(Complex) * grid_size));
-//   partial_product_kernel<<<grid_size, block_size>>>(x, y, partial_result, vol);
-//   checkCudaErrors(cudaDeviceSynchronize());
-//   reduce_partial_result<<<1, block_size>>>(partial_result, grid_size);
-//   checkCudaErrors(cudaDeviceSynchronize());
-
-//   checkCudaErrors(cudaFree(partial_result));
-// }
+void gpu_sclar_multiply_vector (void* x, void* scalar, int vol) {
+  dim3 gridDim(vol / BLOCK_SIZE);
+  dim3 blockDim(BLOCK_SIZE);
+  sclar_multiply_vector_gpu<<<gridDim, blockDim>>>(x, scalar, vol);
+  checkCudaErrors(cudaDeviceSynchronize());
+}
 
 
 // every point has Ns * Nc dim vector, y <- y + scalar * x

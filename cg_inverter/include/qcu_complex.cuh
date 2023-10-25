@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdio>
-#ifdef __cplusplus
-extern "C" {
-#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 class Complex {
 private:
@@ -49,12 +49,12 @@ public:
   {
     return Complex(real_ * rhs, imag_ * rhs);
   }
-  __device__ __host__ Complex &operator*=(const Complex &rhs)
-  {
-    real_ = real_ * rhs.real_ - imag_ * rhs.imag_;
-    imag_ = real_ * rhs.imag_ + imag_ * rhs.real_;
-    return *this;
-  }
+  // __device__ __host__ Complex &operator*=(const Complex &rhs) // TO modify
+  // {
+  //   real_ = real_ * rhs.real_ - imag_ * rhs.imag_;
+  //   imag_ = real_ * rhs.imag_ + imag_ * rhs.real_;
+  //   return *this;
+  // }
   __device__ __host__ Complex &operator*=(const double &rhs)
   {
     real_ = real_ * rhs;
@@ -96,7 +96,11 @@ public:
   __device__ __host__ bool operator==(const Complex &rhs) { return real_ == rhs.real_ && imag_ == rhs.imag_; }
   __device__ __host__ bool operator!=(const Complex &rhs) { return real_ != rhs.real_ || imag_ != rhs.imag_; }
   __device__ __host__ void output() const { printf("(%lf + %lfi)", real_, imag_); }
+  // friend __device__ __host__ Complex& operator*(int lhs, const Complex& rhs);
 };
-#ifdef __cplusplus
-}
-#endif
+// __device__ __host__ Complex operator*(int lhs, const Complex& rhs) {
+//   return Complex(lhs * rhs.real(), lhs * rhs.imag());
+// }
+// #ifdef __cplusplus
+// }
+// #endif

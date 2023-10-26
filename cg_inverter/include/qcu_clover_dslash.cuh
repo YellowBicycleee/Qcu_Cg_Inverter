@@ -19,4 +19,5 @@ void fullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge,
 void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);
 
 // fermion_in and fermion_out are the zero address of total vector
-void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param);
+// void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param);
+void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, void* temp);

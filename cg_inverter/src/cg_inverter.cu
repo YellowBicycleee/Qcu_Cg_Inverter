@@ -101,26 +101,26 @@ static void compare_vectors_kernel(void* a_vec, void* b_vec, void* partial_resul
 
 // res_vec and partial_vec does not store any outside information, 
 //    just to avoid repeating memory allocating
-bool if_converge(void* b_vec, void* x_vec, void* res_vec, void* partial_vec, void* gauge, QcuParam *param) {
+// bool if_converge(void* b_vec, void* x_vec, void* res_vec, void* partial_vec, void* gauge, QcuParam *param, void* temporary_vector) {
 
-  double diff;
-  bool res = false;
-  int vol = param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3];
+//   double diff;
+//   bool res = false;
+//   int vol = param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3];
 
-  // D dagger D x = b?
-  MmV_one_round (res_vec, x_vec, gauge, param);// Ap, A = d dagger d
-  // compare b with res_vec
-  compare_vectors_kernel(b_vec, res_vec, partial_vec, vol);
-  checkCudaErrors(cudaMemcpy(&diff, partial_vec, sizeof(double), cudaMemcpyDeviceToHost));  // partial_result[0]就是最终diff
-  if (diff < 1e-23) {
-    res = true;
-  }
-// #ifdef DEBUG
-//   printf("difference = %.9lf\n", diff);
-// #endif
+//   // D dagger D x = b?
+//   MmV_one_round (res_vec, x_vec, gauge, param, temporary_vector);// Ap, A = d dagger d
+//   // compare b with res_vec
+//   compare_vectors_kernel(b_vec, res_vec, partial_vec, vol);
+//   checkCudaErrors(cudaMemcpy(&diff, partial_vec, sizeof(double), cudaMemcpyDeviceToHost));  // partial_result[0]就是最终diff
+//   if (diff < 1e-23) {
+//     res = true;
+//   }
+// // #ifdef DEBUG
+// //   printf("difference = %.9lf\n", diff);
+// // #endif
 
-  return res;
-}
+//   return res;
+// }
 
 bool if_converge(void* r_vec, int vol) {
   bool res = false;
@@ -178,8 +178,7 @@ double compare_two_vectors_cpu (void* d_a, void* d_b, int vol) {
 //      temp_vec1, temp_vec2, res_vec, partial_vec: temporary 
 // r_vec, p_vec, temp_vec1, temp_vec2, res_vec :  vol * Ns * Nc
 // partial_vec : (vol * Ns * Nc + BLOCK_SIZE-1) / BLOCK_SIZE
-bool cg(void* b_vec, void* r_vec, void* p_vec, void* x_vec, void* temp_vec1, void* temp_vec2, void* res_vec, void* partial_vec, void *gauge, QcuParam *param) 
-{
+bool cg(void* b_vec, void* r_vec, void* p_vec, void* x_vec, void* temp_vec1, void* temp_vec2, void* res_vec, void* partial_vec, void *gauge, QcuParam *param, void* temporary_vector) {
   int vol = param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] *param->lattice_size[3];
   bool if_end = false;
 
@@ -194,6 +193,8 @@ bool cg(void* b_vec, void* r_vec, void* p_vec, void* x_vec, void* temp_vec1, voi
   Complex* d_denominator;
   Complex* d_numerator;
   Complex* d_one;
+
+
   checkCudaErrors(cudaMalloc(&d_alpha, sizeof(Complex)));
   checkCudaErrors(cudaMalloc(&d_beta, sizeof(Complex)));
   checkCudaErrors(cudaMalloc(&d_denominator, sizeof(Complex)));
@@ -202,7 +203,7 @@ bool cg(void* b_vec, void* r_vec, void* p_vec, void* x_vec, void* temp_vec1, voi
 
   mpi_comm->interprocess_inner_prod_barrier(r_vec, r_vec, d_numerator, vol);  // <r, r> --> d_numerator
 
-  MmV_one_round (temp_vec1, p_vec, gauge, param); // Ap--->temp_vec1
+  MmV_one_round (temp_vec1, p_vec, gauge, param, temporary_vector); // Ap--->temp_vec1
 
   mpi_comm->interprocess_inner_prod_barrier (p_vec, temp_vec1, d_denominator, vol);  // <p, Ap>
 
@@ -221,7 +222,6 @@ bool cg(void* b_vec, void* r_vec, void* p_vec, void* x_vec, void* temp_vec1, voi
 
 
   // : if converge, return x
-  //if (if_converge(b_vec, x_vec, res_vec, partial_vec, gauge, param)) {
   if (if_converge(r_vec, vol)) {
     if_end = true;
     goto cg_free;
@@ -275,6 +275,7 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   void* temp_vec2;
   void* res_vec;
   void* d_coeff;
+  void* temporary_vector;
 
 // #ifdef DEBUG
 //   void* debug_ptr;
@@ -294,8 +295,11 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   checkCudaErrors(cudaMalloc(&temp_vec2, sizeof(Complex) * vol * Ns * Nc));
   checkCudaErrors(cudaMalloc(&res_vec, sizeof(Complex) * vol * Ns * Nc));
   checkCudaErrors(cudaMalloc(&d_coeff, sizeof(Complex)));
+  checkCudaErrors(cudaMalloc(&temporary_vector, sizeof(Complex) * vol * Ns * Nc));
+
 
   checkCudaErrors(cudaMemcpy(d_coeff, &coeff, sizeof(Complex), cudaMemcpyHostToDevice));
+
 
   void* partial_result_vector;  // use this to reduce, the size is (vol * Ns * Nc * Ns * Nc + BLOCK_SIZE - 1) / BLOCK_SIZE
   int partial_result_length = (vol * Ns * Nc * Ns * Nc + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -303,14 +307,10 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
 
 
   clearVector(x_vector, vol);   // x <- 0
-// #ifdef DEBUG
-//   fullCloverDslashOneRound (d_new_b, debug_b_ptr, gauge, param, 1);
-// #else
   fullCloverDslashOneRound (d_new_b, b_vector, gauge, param, 1);  // new_b <- Dslash_dagger b
-// #endif
 
   // r = b - Ax
-  MmV_one_round (temp_vec1, x_vector, gauge, param);// D dagger D x ---> temp_vec1 (Ax)
+  MmV_one_round (temp_vec1, x_vector, gauge, param, temporary_vector);// D dagger D x ---> temp_vec1 (Ax)
   coeff = Complex(-1, 0);
   checkCudaErrors(cudaMemcpy(d_coeff, &coeff, sizeof(Complex), cudaMemcpyHostToDevice));
   checkCudaErrors(cudaMemcpy(r_vec, d_new_b, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToDevice));     // r <- new_b
@@ -318,24 +318,20 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   mpi_comm->interprocess_saxpy_barrier(temp_vec1, r_vec, d_coeff, vol); // r <-- newb - Ax
   // r = b - Ax end
 
-
   checkCudaErrors(cudaMemcpy(p_vec, r_vec, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToDevice));     // p = r
 
   //  if converge, return x
-  // if (if_converge(d_new_b, x_vector, res_vec, partial_result_vector, gauge, param)) {
   if (if_converge(r_vec, vol)) {
-    // if_end = true;
     printf("cg success!!!\n");
     goto cg_inverter_free;
   }
 
-  // printf("begin iteration>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.\n");
   // iterate
   for (int i = 0; i < max_iterator; i++) {
 // #ifdef DEBUG
 //     cg_res = cg(d_new_b, r_vec, p_vec, x_vector, temp_vec1, temp_vec2, res_vec, partial_result_vector, gauge, param, debug_ptr);
 // #else
-    cg_res = cg(d_new_b, r_vec, p_vec, x_vector, temp_vec1, temp_vec2, res_vec, partial_result_vector, gauge, param);
+    cg_res = cg(d_new_b, r_vec, p_vec, x_vector, temp_vec1, temp_vec2, res_vec, partial_result_vector, gauge, param, temporary_vector);
 // #endif
     if (cg_res) {
       printf("number of iteration %d\n", i + 1);
@@ -360,7 +356,7 @@ cg_inverter_free:
   checkCudaErrors(cudaFree(res_vec));
   checkCudaErrors(cudaFree(partial_result_vector));
   checkCudaErrors(cudaFree(d_coeff));
-
+  checkCudaErrors(cudaFree(temporary_vector));
 // #ifdef DEBUG
 //   checkCudaErrors(cudaFree(debug_ptr));
 //   checkCudaErrors(cudaFree(debug_b_ptr));

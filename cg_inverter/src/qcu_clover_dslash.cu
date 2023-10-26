@@ -959,17 +959,9 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
   // checkCudaErrors(cudaFree(d_kappa));
 }
 
-void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param) {
-  void* temp;
-  int vol = param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3];
-  checkCudaErrors(cudaMalloc(&temp, sizeof(Complex) * vol * Ns * Nc));
-
-  // fullCloverDslashOneRound(fermion_out, fermion_in, gauge, param, 0); // Dslash vec
-
-  // checkCudaErrors(cudaMemcpy(temp, fermion_out, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToDevice));
+void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, void* temp) {
   fullCloverDslashOneRound(temp, fermion_in, gauge, param, 0); // Dslash vec
   fullCloverDslashOneRound(fermion_out, temp, gauge, param, 1); // Dslash^\dagger Dslash vec
-  checkCudaErrors(cudaFree(temp));
 }
 
 

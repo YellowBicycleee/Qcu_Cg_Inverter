@@ -617,7 +617,7 @@ static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_ou
     }
   }
 
-  // x back   x==0 && parity == eo
+  // x back  x==0 && parity == eo
   move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
   loadGauge(u_local, gauge, 0, move_point, Lx, Ly, Lz, Lt);
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
@@ -950,15 +950,6 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
 
   // Dslash when invert_flag is 0, else if 1---->Dslash dagger
   for (int parity = 0; parity < 2; parity++) {
-    // if (invert_flag == 0) {
-    //   void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
-    //   void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
-    //   callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
-    // } else {
-    //   void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + parity * half_vol * Ns * Nc);
-    //   void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + (1 - parity) * half_vol * Ns * Nc);
-    //   callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
-    // }
     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
     callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);

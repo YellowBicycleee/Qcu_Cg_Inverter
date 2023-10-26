@@ -66,9 +66,20 @@ public:
     return origin + (((((((direction << 1) + parity_) * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * Nc * Nc;
   }
 
+
   __device__ Complex* getPointVector(Complex* origin, int Lx, int Ly, int Lz, int Lt) const{
     return origin + (((t_ * Lz + z_) * Ly + y_) * Lx + x_) * Ns * Nc;
   }
+
+  __device__ double* getCoalescedVectorAddr (void* origin, int Lx, int Ly, int Lz, int Lt) const{
+    return static_cast<double*>(origin) + (((t_ * Lz + z_) * Ly + y_) * Lx + x_);
+  }
+  __device__ double* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt, int thread_id) const{
+    return static_cast<double*>(origin) + (direction * 2 + parity_) * sub_Lx * Ly * Lz * Lt * Nc * (Nc - 1) * 2 + thread_id;
+    // direction <<1 thread_id;
+    // return origin + (((((((direction << 1) + parity_) * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * Nc * Nc;
+  }
+
   __device__ Point& operator= (const Point& rhs) {
     x_ = rhs.x_;
     y_ = rhs.y_;
@@ -80,4 +91,5 @@ public:
   __device__ Complex* getPointClover(Complex* origin, int Lx, int Ly, int Lz, int Lt) const{
     return origin + (((((parity_ * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * (Nc * Ns * Nc * Ns / 2);
   }
+
 };

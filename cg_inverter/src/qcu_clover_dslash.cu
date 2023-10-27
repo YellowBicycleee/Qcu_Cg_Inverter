@@ -14,6 +14,7 @@ static __device__ inline void reconstructSU3(Complex *su3)
   su3[7] = (su3[2] * su3[3] - su3[0] * su3[5]).conj();
   su3[8] = (su3[0] * su3[4] - su3[1] * su3[3]).conj();
 }
+
 // FROM newbing
 // 定义一个函数，用于交换两行
 static __device__ void swapRows(Complex* matrix, int row1, int row2) {
@@ -890,11 +891,58 @@ void CloverDslash::calculateDslash(int invert_flag) {
 
 
 
+// void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+//   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+//   CloverDslash dslash_solver(dslash_param);
+//   dslash_solver.calculateDslash(invert_flag);
+// }
+
+
+void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  int vol = Lx * Ly * Lz * Lt;
+  int half_vol = vol / 2;
+  for (int parity = 0; parity < 2; parity++) {
+    void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
+    void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
+
+    DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
+    CloverDslash dslash_solver(dslash_param);
+    //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
+
+    dslash_solver.inverseCloverResult(half_fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+  }
+}
 void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   CloverDslash dslash_solver(dslash_param);
   dslash_solver.calculateDslash(invert_flag);
 }
+
+
+void preCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  int vol = Lx * Ly * Lz * Lt;
+  int half_vol = vol / 2;
+  for (int parity = 0; parity < 2; parity++) {
+    void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
+    void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
+
+    DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
+    CloverDslash dslash_solver(dslash_param);
+    //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
+
+    dslash_solver.inverseCloverResult(half_fermion_out, clover_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+  }
+}
+
+
 
 void fullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
   // A = (1 + T)     A_{-1} Dslash
@@ -959,9 +1007,44 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
   // checkCudaErrors(cudaFree(d_kappa));
 }
 
+
+
+void newFullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  // A = (1 + T)     A_{-1} Dslash
+  cloverDslashOneRound(fermion_out, fermion_in, gauge, param, invert_flag);
+
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  int vol = Lx * Ly * Lz * Lt;
+  // int half_vol = vol / 2;
+
+  Complex h_kappa(1, 0);
+  Complex h_coeff(1, 0);
+  Complex* d_coeff;
+  Complex* d_kappa;
+  checkCudaErrors(cudaMalloc(&d_coeff, sizeof(Complex)));
+  checkCudaErrors(cudaMalloc(&d_kappa, sizeof(Complex)));
+
+  // h_kappa *= Complex(-1, 0);
+  h_kappa = h_kappa * Complex(-1, 0);
+
+  checkCudaErrors(cudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice));
+  mpi_comm->interprocess_sax_barrier(fermion_out, d_kappa, vol);    // -kappa * left
+  mpi_comm->interprocess_saxpy_barrier(fermion_in, fermion_out, d_coeff, vol);  // src + kappa * dst = dst    coeff=1
+
+  checkCudaErrors(cudaFree(d_coeff));
+  checkCudaErrors(cudaFree(d_kappa));
+
+}
+
 void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, void* temp) {
-  fullCloverDslashOneRound(temp, fermion_in, gauge, param, 0); // Dslash vec
-  fullCloverDslashOneRound(fermion_out, temp, gauge, param, 1); // Dslash^\dagger Dslash vec
+  // fullCloverDslashOneRound(temp, fermion_in, gauge, param, 0); // Dslash vec
+  // fullCloverDslashOneRound(fermion_out, temp, gauge, param, 1); // Dslash^\dagger Dslash vec
+  newFullCloverDslashOneRound(temp, fermion_in, gauge, param, 0); // Dslash vec
+  newFullCloverDslashOneRound(fermion_out, temp, gauge, param, 1); // Dslash^\dagger Dslash vec
 }
 
 

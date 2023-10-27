@@ -307,7 +307,12 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
 
 
   clearVector(x_vector, vol);   // x <- 0
-  fullCloverDslashOneRound (d_new_b, b_vector, gauge, param, 1);  // new_b <- Dslash_dagger b
+  // fullCloverDslashOneRound (d_new_b, b_vector, gauge, param, 1);  // new_b <- Dslash_dagger b
+  checkCudaErrors(cudaMemcpy(temporary_vector, b_vector, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToDevice));
+  invertCloverDslash (temporary_vector, temporary_vector, gauge, param, 0);
+  // dagger
+  newFullCloverDslashOneRound (d_new_b, temporary_vector, gauge, param, 1);
+
 
   // r = b - Ax
   MmV_one_round (temp_vec1, x_vector, gauge, param, temporary_vector);// D dagger D x ---> temp_vec1 (Ax)

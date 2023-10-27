@@ -74,8 +74,8 @@ public:
   __device__ double* getCoalescedVectorAddr (void* origin, int Lx, int Ly, int Lz, int Lt) const{
     return static_cast<double*>(origin) + (((t_ * Lz + z_) * Ly + y_) * Lx + x_);
   }
-  __device__ double* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt, int thread_id) const{
-    return static_cast<double*>(origin) + (direction * 2 + parity_) * sub_Lx * Ly * Lz * Lt * Nc * (Nc - 1) * 2 + thread_id;
+  __device__ double* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt) const{
+    return static_cast<double*>(origin) + (direction * 2 + parity_)* sub_Lx * Ly * Lz * Lt * Nc * (Nc - 1) * 2 + (((t_ * Lz + z_) * Ly + y_) * sub_Lx + x_);
     // direction <<1 thread_id;
     // return origin + (((((((direction << 1) + parity_) * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * Nc * Nc;
   }

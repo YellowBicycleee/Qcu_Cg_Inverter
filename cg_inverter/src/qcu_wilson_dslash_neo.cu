@@ -297,17 +297,13 @@ static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_ou
 
 
 
-static __device__ inline void loadGaugeCoalesced(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int sub_Lx, int Ly, int Lz, int Lt, int thread_id) {
-  double* start_ptr = p.getCoalescedGaugeAddr (gauge_ptr, direction, sub_Lx, Ly, Lz, Lt, thread_id);
-  double real;
-  double imag;
+static __device__ inline void loadGaugeCoalesced(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int sub_Lx, int Ly, int Lz, int Lt) {
+  double* start_ptr = p.getCoalescedGaugeAddr (gauge_ptr, direction, sub_Lx, Ly, Lz, Lt);
+  double* dst_gauge = reinterpret_cast<double*>(u_local);
   int sub_vol = sub_Lx * Ly * Lz * Lt;
-  for (int i = 0; i < (Nc - 1) * Nc; i++) {
-    real = *start_ptr;
+  for (int i = 0; i < (Nc - 1) * Nc * 2; i++) {
+    dst_gauge[i] = *start_ptr;
     start_ptr += sub_vol;
-    imag = *start_ptr;
-    start_ptr += sub_vol;
-    u_local[i] = Complex(real, imag);
   }
   reconstructSU3(u_local);
 }
@@ -352,7 +348,8 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
   }
 
   // \mu = 1
-  loadGauge(u_local, gauge, 0, p, Lx, Ly, Lz, Lt);
+  // loadGauge(u_local, gauge, 0, p, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, X_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 0, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
   // x front    x == Lx-1 && parity != eo
@@ -374,7 +371,7 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
 
   // x back   x==0 && parity == eo
   move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
-  loadGauge(u_local, gauge, 0, move_point, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, X_DIRECTION, move_point, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_x > 1 && x==0 && parity == eo) ? 1 : 0;
@@ -397,7 +394,7 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
 
   // \mu = 2
   // y front
-  loadGauge(u_local, gauge, 1, p, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, Y_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 1, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
@@ -419,7 +416,7 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
 
   // y back
   move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
-  loadGauge(u_local, gauge, 1, move_point, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, Y_DIRECTION, move_point, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
 
@@ -441,7 +438,7 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
 
   // \mu = 3
   // z front
-  loadGauge(u_local, gauge, 2, p, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, Z_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
   coord_boundary = (grid_z > 1) ? Lz-1 : Lz;
@@ -462,7 +459,7 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
 
   // z back
   move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
-  loadGauge(u_local, gauge, 2, move_point, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, Z_DIRECTION, move_point, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_z > 1) ? 1 : 0;
@@ -484,7 +481,8 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
   }
 
   // t: front
-  loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
+  // loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, T_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 3, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
@@ -505,7 +503,7 @@ static __global__ void mpiDslashCoalesce(void *gauge, void *fermion_in, void *fe
   }
   // t: back
   move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
-  loadGauge(u_local, gauge, 3, move_point, Lx, Ly, Lz, Lt);
+  loadGaugeCoalesced(u_local, gauge, T_DIRECTION, move_point, Lx, Ly, Lz, Lt);
   loadVectorCoalesced(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_t > 1) ? 1 : 0;
@@ -567,7 +565,7 @@ void WilsonDslash::calculateDslash(int invert_flag) {
   mpi_comm->postDslash(dslashParam_->fermion_out, parity, invert_flag);
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
+  // printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
 
   checkCudaErrors(cudaFree(d_flag));
 }
@@ -613,7 +611,7 @@ void WilsonDslash::calculateDslashNaive(int invert_flag) {
   mpi_comm->postDslash(dslashParam_->fermion_out, parity, invert_flag);
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
+  // printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
 
   checkCudaErrors(cudaFree(d_flag));
 }
@@ -628,15 +626,18 @@ void callWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam
 
   if (!memory_allocated) {
     checkCudaErrors(cudaMalloc(&coalesced_fermion_in, sizeof(double) * vol / 2 * Ns * Nc * 2));
+    checkCudaErrors(cudaMalloc(&coalesced_gauge, sizeof(double) * Nd * vol * (Nc-1) * Nc * 2));
     memory_allocated = true;
   }
   // checkCudaErrors(cudaMalloc(&coalesced_fermion_out, sizeof(double) * vol / 2 * Ns * Nc * 2));
   // checkCudaErrors(cudaMalloc(&coalesced_gauge, sizeof(double) * Nd * vol * (Nc-1) * Nc * 2));
 
   shiftVectorStorage(coalesced_fermion_in, fermion_in, TO_COALESCE, Lx, Ly, Lz, Lt);
+  shiftGaugeStorage(coalesced_gauge, gauge, TO_COALESCE, Lx, Ly, Lz, Lt);
 
   // DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
-  DslashParam dslash_param(coalesced_fermion_in, fermion_out, gauge, param, parity);
+  // DslashParam dslash_param(coalesced_fermion_in, fermion_out, gauge, param, parity);
+  DslashParam dslash_param(coalesced_fermion_in, fermion_out, coalesced_gauge, param, parity);
   WilsonDslash dslash_solver(dslash_param);
   dslash_solver.calculateDslash(0);
 

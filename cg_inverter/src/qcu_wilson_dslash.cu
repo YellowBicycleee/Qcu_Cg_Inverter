@@ -467,30 +467,6 @@ static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_ou
 }
 
 
-
-// void WilsonDslash::calculateDslash(int invert_flag){
-//   int Lx = dslashParam_->Lx;
-//   int Ly = dslashParam_->Ly;
-//   int Lz = dslashParam_->Lz;
-//   int Lt = dslashParam_->Lt;
-//   int parity = dslashParam_->parity;
-
-//   int space = Lx * Ly * Lz * Lt >> 1;
-//   dim3 gridDim(space / BLOCK_SIZE);
-//   dim3 blockDim(BLOCK_SIZE);
-
-//   checkCudaErrors(cudaDeviceSynchronize());
-//   checkCudaErrors(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
-//   auto start = std::chrono::high_resolution_clock::now();
-
-//   void *args[] = {&dslashParam_->gauge, &dslashParam_->fermion_in, &dslashParam_->fermion_out, &Lx, &Ly, &Lz, &Lt, &parity};
-//   checkCudaErrors(cudaLaunchKernel((void *)gpuDslash, gridDim, blockDim, args));
-//   checkCudaErrors(cudaDeviceSynchronize());
-//   auto end = std::chrono::high_resolution_clock::now();
-//   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-//   printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
-// }
-
 void MpiWilsonDslash::calculateDslash(int invert_flag) {
   int Lx = dslashParam_->Lx;
   int Ly = dslashParam_->Ly;

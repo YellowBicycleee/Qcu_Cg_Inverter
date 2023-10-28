@@ -92,6 +92,33 @@ public:
     imag_ = 0;
     return *this;
   }
+
+
+  __device__ __host__ Complex multipy_i()
+  {
+    return Complex(-imag_, real_);
+  }
+  __device__ __host__ Complex multipy_minus_i()
+  {
+    return Complex(imag_, -real_);
+  }
+  __device__ __host__ Complex &self_multipy_i()
+  {
+    // return Complex(-imag_, real_);
+    double temp = real_;
+    real_ = -imag_;
+    imag_ = temp;
+    return *this;
+  }
+  __device__ __host__ Complex &self_multipy_minus_i()
+  {
+    // return Complex(imag_, -real_);
+    double temp = -real_;
+    real_ = imag_;
+    imag_ = temp;
+    return *this;
+  }
+
   __device__ __host__ Complex conj() const { return Complex(real_, -imag_); }
   __device__ __host__ bool operator==(const Complex &rhs) { return real_ == rhs.real_ && imag_ == rhs.imag_; }
   __device__ __host__ bool operator!=(const Complex &rhs) { return real_ != rhs.real_ || imag_ != rhs.imag_; }

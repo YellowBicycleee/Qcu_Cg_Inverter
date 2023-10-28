@@ -17,6 +17,8 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag);
 void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param);
 
+void loadQcuGauge(void* gauge, QcuParam *param);
+
 #ifdef __cplusplus
 }
 #endif

@@ -26,7 +26,8 @@
 #define FRONT 1
 #define BACK 0
 
-#define BLOCK_SIZE 128
+// #define BLOCK_SIZE 128
+#define BLOCK_SIZE 256
 #define WARP_SIZE 32
 
 

@@ -792,6 +792,7 @@ CloverDslash::CloverDslash(DslashParam& param) : Dslash(param){
   }
 
   if (!clover_prepared) {
+    mpi_comm->allocateGaugeBuffer();
     mpi_comm->prepareGauge();
 
     void* origin_gauge = dslashParam_->gauge;

@@ -708,55 +708,55 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
   // x front    x == Lx-1 && parity != eo
   coord_boundary = (grid_x > 1 && x == Lx-1 && parity != eo) ? Lx-1 : Lx;
-  if (x < coord_boundary) {
+  // if (x < coord_boundary) {
 
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += temp1.multipy_i() * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += temp2.multipy_i() * flag;
-    }
-#endif
-  }
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += temp1.multipy_i() * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += temp2.multipy_i() * flag;
+//     }
+// #endif
+  // }
   // x back   x==0 && parity == eo
   move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
   loadGauge(u_local, gauge, X_DIRECTION, move_point, Lx, Ly, Lz, Lt);
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);;
 
   coord_boundary = (grid_x > 1 && x==0 && parity == eo) ? 1 : 0;
-  if (x >= coord_boundary) {
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
-              u_local[j * Nc + i].conj(); // transpose and conj
+  // if (x >= coord_boundary) {
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
 
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
-              u_local[j * Nc + i].conj(); // transpose and conj
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
-    }
-#endif
-  }
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
+//     }
+// #endif
+  // }
 
   // \mu = 2
   // y front
@@ -765,26 +765,26 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_y > 1) ? Ly-1 : Ly;
-  if (y < coord_boundary) {
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j] *  flag) * u_local[i * Nc + j];
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += temp1 * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += -temp2 * flag;
-    }
-#endif
-  }
+  // if (y < coord_boundary) {
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j] *  flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += -temp2 * flag;
+//     }
+// #endif
+  // }
 
   // y back
   move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
@@ -793,26 +793,26 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
 
 
   coord_boundary = (grid_y > 1) ? 1 : 0;
-  if (y >= coord_boundary) {
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += -temp1 * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += temp2 * flag;
-    }
-#endif
-  }
+  // if (y >= coord_boundary) {
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += -temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += temp2 * flag;
+//     }
+// #endif
+  // }
 
   // \mu = 3
   // z front
@@ -820,26 +820,26 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
   move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
   coord_boundary = (grid_z > 1) ? Lz-1 : Lz;
-  if (z < coord_boundary) {
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[2 * Nc + i] += temp1.multipy_i() * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[3 * Nc + i] += temp2.multipy_minus_i() * flag;
-    }
-#endif
-  }
+  // if (z < coord_boundary) {
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += temp1.multipy_i() * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += temp2.multipy_minus_i() * flag;
+//     }
+// #endif
+  // }
 
   // z back
   move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
@@ -847,28 +847,28 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_z > 1) ? 1 : 0;
-  if (z >= coord_boundary) {
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
-              u_local[j * Nc + i].conj(); // transpose and conj
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) *
-              u_local[j * Nc + i].conj(); // transpose and conj
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[2 * Nc + i] += temp1.multipy_minus_i() * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[3 * Nc + i] += temp2.multipy_i() * flag;
-    }
-#endif
-  }
+  // if (z >= coord_boundary) {
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += temp1.multipy_minus_i() * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += temp2.multipy_i() * flag;
+//     }
+// #endif
+  // }
 
   // t: front
   // loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
@@ -877,26 +877,26 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_t > 1) ? Lt-1 : Lt;
-  if (t < coord_boundary) {
-#ifdef INCLUDE_COMPUTATION
-#pragma unroll
-    for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
-#pragma unroll
-      for (int j = 0; j < Nc; j++) {
-        // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j] * flag) * u_local[i * Nc + j];
-        // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
-      }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[2 * Nc + i] += -temp1 * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[3 * Nc + i] += -temp2 * flag;
-    }
-#endif
-  }
+  // if (t < coord_boundary) {
+// #ifdef INCLUDE_COMPUTATION
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j] * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += -temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += -temp2 * flag;
+//     }
+// #endif
+  // }
   // t: back
   move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
   loadGauge(u_local, gauge, T_DIRECTION, move_point, Lx, Ly, Lz, Lt);
@@ -908,21 +908,27 @@ static __global__ void mpiDslashNaiveOnlyMemoryAccessing(void *gauge, void *ferm
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
-      temp2.clear2Zero();
+      // temp2.clear2Zero();
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // first row vector with col vector
         temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
         // second row vector with col vector
         temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        // temp1 += (src_local[1 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
       }
       dst_local[0 * Nc + i] += temp1;
       dst_local[2 * Nc + i] += temp1 * flag;
       dst_local[1 * Nc + i] += temp2;
       dst_local[3 * Nc + i] += temp2 * flag;
+      // dst_local[1 * Nc + i] += temp1;
+      // dst_local[3 * Nc + i] += temp1 * flag;
     }
 #endif
   }
+
+
+
 
   // store result
   // storeVectorCoalesced(dst_local, fermion_out, p, Lx, Ly, Lz, Lt);

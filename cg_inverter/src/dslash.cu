@@ -69,11 +69,11 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // wilsonDslashOneRound(fermion_out, fermion_in, gauge, param, parity);
   // callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
 
-  callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
+  // callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
 
-  callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
-  callNop(fermion_out, fermion_in, gauge, param, parity, 0);
-  // calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);
+  // callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
+  // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
+  calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);
 }
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);

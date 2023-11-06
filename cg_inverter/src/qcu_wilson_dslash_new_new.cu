@@ -261,8 +261,8 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
-              u_local[j * Nc + i].conj(); // transpose and conj
+        // temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
+        //       u_local[j * Nc + i].conj(); // transpose and conj
 
         temp_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
                     + (-src_local_double_ptr[(3 * Nc + j) * 2 + 1] * flag));
@@ -316,19 +316,51 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
 #ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
+      // temp1.clear2Zero();
+      // temp2.clear2Zero();
+      temp_res1[0] = temp_res1[1] = 0;
+      temp_res2[0] = temp_res2[1] = 0;
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+        // temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+        temp_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
+                    + (src_local_double_ptr[(3 * Nc + j) * 2 + 0] * flag));
+        temp_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
+                    + (src_local_double_ptr[(3 * Nc + j) * 2 + 1] * flag));
+
+        temp_res1[0] += temp_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+                      - temp_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
+        temp_res1[1] += temp_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
+                      + temp_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+
+
         // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j] *  flag) * u_local[i * Nc + j];
+        // temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j] *  flag) * u_local[i * Nc + j];
+        temp_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
+                    - (src_local_double_ptr[(2 * Nc + j) * 2 + 0] * flag));
+        temp_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
+                    - (src_local_double_ptr[(2 * Nc + j) * 2 + 1] * flag));
+
+        temp_res2[0] += temp_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+                      - temp_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
+        temp_res2[1] += temp_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
+                      + temp_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+
       }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += temp1 * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += -temp2 * flag;
+      // dst_local[0 * Nc + i] += temp1;
+      // dst_local[3 * Nc + i] += temp1 * flag;
+      dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
+      dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += flag * temp_res1[0];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += flag * temp_res1[1];
+
+      // dst_local[1 * Nc + i] += temp2;
+      // dst_local[2 * Nc + i] += -temp2 * flag;
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
+      dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += -flag * temp_res2[0];
+      dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += -flag * temp_res2[1];
     }
 #endif
   }
@@ -338,25 +370,57 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
   loadGauge(reinterpret_cast<double*>(u_local), gauge, Y_DIRECTION, move_point, Lx, Ly, Lz, Lt);
   loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
 
-
   coord_boundary = (grid_y > 1) ? 1 : 0;
   if (y >= coord_boundary) {
 #ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
+      // temp1.clear2Zero();
+      // temp2.clear2Zero();
+      temp_res1[0] = temp_res1[1] = 0;
+      temp_res2[0] = temp_res2[1] = 0;
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // first row vector with col vector
-        temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        // temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        temp_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
+                    - (src_local_double_ptr[(3 * Nc + j) * 2 + 0] * flag));
+        temp_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
+                    - (src_local_double_ptr[(3 * Nc + j) * 2 + 1] * flag));
+
+        temp_res1[0] += temp_reg[0] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
+                      - temp_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
+        temp_res1[1] += temp_reg[0] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
+                      + temp_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
+
+
+
         // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        // temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        temp_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
+                    + (src_local_double_ptr[(2 * Nc + j) * 2 + 0] * flag));
+        temp_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
+                    + (src_local_double_ptr[(2 * Nc + j) * 2 + 1] * flag));
+
+        temp_res2[0] += temp_reg[0] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
+                      - temp_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
+        temp_res2[1] += temp_reg[0] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
+                      + temp_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
+
       }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += -temp1 * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += temp2 * flag;
+      // dst_local[0 * Nc + i] += temp1;
+      // dst_local[3 * Nc + i] += -temp1 * flag;
+      dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
+      dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += -flag * temp_res1[0];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += -flag * temp_res1[1];
+
+      // dst_local[1 * Nc + i] += temp2;
+      // dst_local[2 * Nc + i] += temp2 * flag;
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
+      dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += flag * temp_res2[0];
+      dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += flag * temp_res2[1];
     }
 #endif
   }

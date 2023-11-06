@@ -149,9 +149,9 @@ __device__ inline void loadVector(double* src_local, void* fermion_in, const Poi
 }
 
 
+
 static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, double flag_param) {
   assert(parity == 0 || parity == 1);
-  // __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
   __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
 
   Lx >>= 1;
@@ -163,29 +163,25 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
   int x = thread_id % Lx;
 
   int coord_boundary;
-  // Complex flag = *(static_cast<Complex*>(flag_ptr));
-  // double flag = *(static_cast<double*>(flag_ptr));
   double flag = flag_param;
 
 
   Point p(x, y, z, t, parity);
   Point move_point;
-  // Complex u_local[Nc * Nc];   // for GPU
-  Complex u_local[Nc * Nc * 2];   // for GPU
-  double* u_local_double_ptr = reinterpret_cast<double*>(u_local);
-
+  Complex u_local[Nc * Nc];   // for GPU
   Complex src_local[Ns * Nc]; // for GPU
-  double* src_local_double_ptr = reinterpret_cast<double*>(src_local);
-
   Complex dst_local[Ns * Nc]; // for GPU
-  double* dst_local_double_ptr = reinterpret_cast<double*>(dst_local);
 
+  double* u_local_double_ptr = reinterpret_cast<double*>(u_local);
+  double* src_local_double_ptr = reinterpret_cast<double*>(src_local);
+  double* dst_local_double_ptr = reinterpret_cast<double*>(dst_local);
   // Complex temp;
   Complex temp1;
   Complex temp2;
 
-  
-
+  double temp_reg[2];
+  double temp_res1[2];
+  double temp_res2[2];
   int eo = (y+z+t) & 0x01;
 
   for (int i = 0; i < Ns * Nc; i++) {
@@ -193,130 +189,88 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
   }
 
   // \mu = 1
-  loadGauge(u_local_double_ptr, gauge, X_DIRECTION, p, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, X_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 0, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
   // x front    x == Lx-1 && parity != eo
   coord_boundary = (grid_x > 1 && x == Lx-1 && parity != eo) ? Lx-1 : Lx;
   if (x < coord_boundary) {
 
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
-      double temp_res1[2] = {0, 0};
-      double temp_res2[2] = {0, 0};
-
-      double temp1_reg[2] = {0, 0};
-      double temp2_reg[2] = {0, 0};
-
       // temp1.clear2Zero();
-      // temp2.clear2Zero();
+      temp2.clear2Zero();
+      temp_res1[0] = temp_res1[1] = 0;
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
-        temp1_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
-                     + flag * src_local_double_ptr[(3 * Nc + j) * 2 + 1]);
-        temp1_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
-                     - flag * src_local_double_ptr[(3 * Nc + j) * 2 + 0]);
+        temp_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
+                    - (-src_local_double_ptr[(3 * Nc + j) * 2 + 1] * flag));
+        temp_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
+                    - (src_local_double_ptr[(3 * Nc + j) * 2 + 0] * flag));
 
-        temp_res1[0] += temp1_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
-                     - temp1_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
-        temp_res1[1] += temp1_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
-                     + temp1_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+        temp_res1[0] += temp_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+                      - temp_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
+        temp_res1[1] += temp_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
+                      + temp_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+
 
         // second row vector with col vector
-        // temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
-        temp2_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
-                     + flag * src_local_double_ptr[(2 * Nc + j) * 2 + 1]);
-        temp2_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
-                     - flag * src_local_double_ptr[(2 * Nc + j) * 2 + 0]);
-
-        temp_res2[0] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
-                     - temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
-        temp_res2[1] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
-                     + temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+        temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
       }
+      // dst_local[0 * Nc + i] += temp1;
+      // dst_local[3 * Nc + i] += temp1.multipy_i() * flag;
       dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
       dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
-      // dst_local[0 * Nc + i] += temp1;
       dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += -flag * temp_res1[1];
       dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += flag * temp_res1[0];
-      // dst_local[3 * Nc + i] += temp1.multipy_i() * flag;
 
-      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
-      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
-      // dst_local[1 * Nc + i] += temp2;
-      dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += -flag * temp_res1[1];
-      dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += flag * temp_res1[0];
-      // dst_local[2 * Nc + i] += temp2.multipy_i() * flag;
+
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[2 * Nc + i] += temp2.multipy_i() * flag;
     }
+#endif
   }
   // x back   x==0 && parity == eo
   move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
-  loadGauge(u_local_double_ptr, gauge, X_DIRECTION, move_point, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);;
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, X_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);;
 
   coord_boundary = (grid_x > 1 && x==0 && parity == eo) ? 1 : 0;
   if (x >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
-      // temp1.clear2Zero();
-      // temp2.clear2Zero();
-      double temp_res1[2] = {0, 0};
-      double temp_res2[2] = {0, 0};
-
-      double temp1_reg[2] = {0, 0};
-      double temp2_reg[2] = {0, 0};
+      temp1.clear2Zero();
+      temp2.clear2Zero();
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // first row vector with col vector
         temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
               u_local[j * Nc + i].conj(); // transpose and conj
-        temp1_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
-                     - flag * src_local_double_ptr[(3 * Nc + j) * 2 + 1]);
-        temp1_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
-                     + flag * src_local_double_ptr[(3 * Nc + j) * 2 + 0]);
 
-        temp_res1[0] += temp1_reg[0] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
-                      - temp1_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
-        temp_res1[1] += temp1_reg[0] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
-                      + temp1_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
         // second row vector with col vector
-        // temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
-              // u_local[j * Nc + i].conj(); // transpose and conj
-        temp2_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
-                      - flag * src_local_double_ptr[(2 * Nc + j) * 2 + 1]);
-        temp2_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
-                      + flag * src_local_double_ptr[(2 * Nc + j) * 2 + 0]);
-
-        temp_res2[0] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
-                      - temp2_reg[1] * (-u_local_double_ptr[(i * Nc + j) * 2 + 1]);
-        temp_res2[1] += temp2_reg[0] * (-u_local_double_ptr[(i * Nc + j) * 2 + 1]) \
-                      + temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+              u_local[j * Nc + i].conj(); // transpose and conj
       }
-      // dst_local[0 * Nc + i] += temp1;
-      // dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
-      dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
-      dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
-      dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += flag * temp_res1[1];
-      dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += -flag * temp_res1[0];
-
-      // dst_local[1 * Nc + i] += temp2;
-      // dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
-      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
-      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
-      dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += flag * temp_res1[1];
-      dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += -flag * temp_res1[0];
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
     }
+#endif
   }
 
   // \mu = 2
   // y front
-  loadGauge(u_local_double_ptr, gauge, Y_DIRECTION, p, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, Y_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 1, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_y > 1) ? Ly-1 : Ly;
   if (y < coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
@@ -333,16 +287,18 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       dst_local[1 * Nc + i] += temp2;
       dst_local[2 * Nc + i] += -temp2 * flag;
     }
+#endif
   }
 
   // y back
   move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
-  loadGauge(u_local_double_ptr, gauge, Y_DIRECTION, move_point, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, Y_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
 
 
   coord_boundary = (grid_y > 1) ? 1 : 0;
   if (y >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
@@ -359,15 +315,17 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       dst_local[1 * Nc + i] += temp2;
       dst_local[2 * Nc + i] += temp2 * flag;
     }
+#endif
   }
 
   // \mu = 3
   // z front
-  loadGauge(u_local_double_ptr, gauge, Z_DIRECTION, p, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, Z_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
   coord_boundary = (grid_z > 1) ? Lz-1 : Lz;
   if (z < coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
@@ -384,15 +342,17 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       dst_local[1 * Nc + i] += temp2;
       dst_local[3 * Nc + i] += temp2.multipy_minus_i() * flag;
     }
+#endif
   }
 
   // z back
   move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
-  loadGauge(u_local_double_ptr, gauge, Z_DIRECTION, move_point, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, Z_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_z > 1) ? 1 : 0;
   if (z >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
@@ -411,16 +371,18 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       dst_local[1 * Nc + i] += temp2;
       dst_local[3 * Nc + i] += temp2.multipy_i() * flag;
     }
+#endif
   }
 
   // t: front
   // loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
-  loadGauge(u_local_double_ptr, gauge, T_DIRECTION, p, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, T_DIRECTION, p, Lx, Ly, Lz, Lt);
   move_point = p.move(FRONT, 3, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_t > 1) ? Lt-1 : Lt;
   if (t < coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
@@ -437,14 +399,16 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       dst_local[1 * Nc + i] += temp2;
       dst_local[3 * Nc + i] += -temp2 * flag;
     }
+#endif
   }
   // t: back
   move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
-  loadGauge(u_local_double_ptr, gauge, T_DIRECTION, move_point, Lx, Ly, Lz, Lt);
-  loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  loadGauge(reinterpret_cast<double*>(u_local), gauge, T_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(reinterpret_cast<double*>(src_local), fermion_in, move_point, Lx, Ly, Lz, Lt);
 
   coord_boundary = (grid_t > 1) ? 1 : 0;
   if (t >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       temp1.clear2Zero();
@@ -461,8 +425,8 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       dst_local[1 * Nc + i] += temp2;
       dst_local[3 * Nc + i] += temp2 * flag;
     }
+#endif
   }
-
 
   Complex* dst_global = p.getPointVector(static_cast<Complex *>(fermion_out), Lx, Ly, Lz, Lt);
   for (int i = 0; i < Ns * Nc; i++) {
@@ -470,6 +434,329 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
   }
   
 }
+
+// static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, double flag_param) {
+//   assert(parity == 0 || parity == 1);
+//   // __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
+//   __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
+
+//   Lx >>= 1;
+
+//   int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+//   int t = thread_id / (Lz * Ly * Lx);
+//   int z = thread_id % (Lz * Ly * Lx) / (Ly * Lx);
+//   int y = thread_id % (Ly * Lx) / Lx;
+//   int x = thread_id % Lx;
+
+//   int coord_boundary;
+//   // Complex flag = *(static_cast<Complex*>(flag_ptr));
+//   // double flag = *(static_cast<double*>(flag_ptr));
+//   double flag = flag_param;
+
+
+//   Point p(x, y, z, t, parity);
+//   Point move_point;
+//   // Complex u_local[Nc * Nc];   // for GPU
+//   Complex u_local[Nc * Nc * 2];   // for GPU
+//   double* u_local_double_ptr = reinterpret_cast<double*>(u_local);
+
+//   Complex src_local[Ns * Nc]; // for GPU
+//   double* src_local_double_ptr = reinterpret_cast<double*>(src_local);
+
+//   Complex dst_local[Ns * Nc]; // for GPU
+//   double* dst_local_double_ptr = reinterpret_cast<double*>(dst_local);
+
+//   // Complex temp;
+//   Complex temp1;
+//   Complex temp2;
+
+  
+
+//   int eo = (y+z+t) & 0x01;
+
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     dst_local[i].clear2Zero();
+//   }
+
+//   // \mu = 1
+//   loadGauge(u_local_double_ptr, gauge, X_DIRECTION, p, Lx, Ly, Lz, Lt);
+//   move_point = p.move(FRONT, 0, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+//   // x front    x == Lx-1 && parity != eo
+//   coord_boundary = (grid_x > 1 && x == Lx-1 && parity != eo) ? Lx-1 : Lx;
+//   if (x < coord_boundary) {
+
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       // double temp_res1[2] = {0, 0};
+//       // double temp_res2[2] = {0, 0};
+
+//       // double temp1_reg[2] = {0, 0};
+//       // double temp2_reg[2] = {0, 0};
+
+//       // temp1.clear2Zero();
+//       // temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//         // temp1_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
+//         //              + flag * src_local_double_ptr[(3 * Nc + j) * 2 + 1]);
+//         // temp1_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
+//         //              - flag * src_local_double_ptr[(3 * Nc + j) * 2 + 0]);
+
+//         // temp_res1[0] += temp1_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+//         //              - temp1_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
+//         // temp_res1[1] += temp1_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
+//         //              + temp1_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//         // temp2_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
+//         //              + flag * src_local_double_ptr[(2 * Nc + j) * 2 + 1]);
+//         // temp2_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
+//         //              - flag * src_local_double_ptr[(2 * Nc + j) * 2 + 0]);
+
+//         // temp_res2[0] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+//         //              - temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 1];
+//         // temp_res2[1] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 1] \
+//         //              + temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+//       }
+//       // dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
+//       // dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
+//       dst_local[0 * Nc + i] += temp1;
+//       // dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += -flag * temp_res1[1];
+//       // dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += flag * temp_res1[0];
+//       dst_local[3 * Nc + i] += temp1.multipy_i() * flag;
+
+//       // dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
+//       // dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
+//       dst_local[1 * Nc + i] += temp2;
+//       // dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += -flag * temp_res1[1];
+//       // dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += flag * temp_res1[0];
+//       dst_local[2 * Nc + i] += temp2.multipy_i() * flag;
+//     }
+//   }
+//   // x back   x==0 && parity == eo
+//   move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
+//   loadGauge(u_local_double_ptr, gauge, X_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);;
+
+//   coord_boundary = (grid_x > 1 && x==0 && parity == eo) ? 1 : 0;
+//   if (x >= coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+//       // double temp_res1[2] = {0, 0};
+//       // double temp_res2[2] = {0, 0};
+
+//       // double temp1_reg[2] = {0, 0};
+//       // double temp2_reg[2] = {0, 0};
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//         // temp1_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
+//         //              - flag * src_local_double_ptr[(3 * Nc + j) * 2 + 1]);
+//         // temp1_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
+//         //              + flag * src_local_double_ptr[(3 * Nc + j) * 2 + 0]);
+
+//         // temp_res1[0] += temp1_reg[0] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
+//         //               - temp1_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
+//         // temp_res1[1] += temp1_reg[0] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
+//         //               + temp1_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//         // temp2_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
+//         //               - flag * src_local_double_ptr[(2 * Nc + j) * 2 + 1]);
+//         // temp2_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
+//         //               + flag * src_local_double_ptr[(2 * Nc + j) * 2 + 0]);
+
+//         // temp_res2[0] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+//         //               - temp2_reg[1] * (-u_local_double_ptr[(i * Nc + j) * 2 + 1]);
+//         // temp_res2[1] += temp2_reg[0] * (-u_local_double_ptr[(i * Nc + j) * 2 + 1]) \
+//         //               + temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
+//       // dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
+//       // dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
+//       // dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += flag * temp_res1[1];
+//       // dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += -flag * temp_res1[0];
+
+
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
+//       // dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
+//       // dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
+//       // dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += flag * temp_res1[1];
+//       // dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += -flag * temp_res1[0];
+//     }
+//   }
+
+//   // \mu = 2
+//   // y front
+//   loadGauge(u_local_double_ptr, gauge, Y_DIRECTION, p, Lx, Ly, Lz, Lt);
+//   move_point = p.move(FRONT, 1, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+//   coord_boundary = (grid_y > 1) ? Ly-1 : Ly;
+//   if (y < coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j] *  flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += -temp2 * flag;
+//     }
+//   }
+
+//   // y back
+//   move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
+//   loadGauge(u_local_double_ptr, gauge, Y_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+
+//   coord_boundary = (grid_y > 1) ? 1 : 0;
+//   if (y >= coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[3 * Nc + i] += -temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[2 * Nc + i] += temp2 * flag;
+//     }
+//   }
+
+//   // \mu = 3
+//   // z front
+//   loadGauge(u_local_double_ptr, gauge, Z_DIRECTION, p, Lx, Ly, Lz, Lt);
+//   move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+//   coord_boundary = (grid_z > 1) ? Lz-1 : Lz;
+//   if (z < coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += temp1.multipy_i() * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += temp2.multipy_minus_i() * flag;
+//     }
+//   }
+
+//   // z back
+//   move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
+//   loadGauge(u_local_double_ptr, gauge, Z_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+//   coord_boundary = (grid_z > 1) ? 1 : 0;
+//   if (z >= coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) *
+//               u_local[j * Nc + i].conj(); // transpose and conj
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += temp1.multipy_minus_i() * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += temp2.multipy_i() * flag;
+//     }
+//   }
+
+//   // t: front
+//   // loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
+//   loadGauge(u_local_double_ptr, gauge, T_DIRECTION, p, Lx, Ly, Lz, Lt);
+//   move_point = p.move(FRONT, 3, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+//   coord_boundary = (grid_t > 1) ? Lt-1 : Lt;
+//   if (t < coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j] * flag) * u_local[i * Nc + j];
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += -temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += -temp2 * flag;
+//     }
+//   }
+//   // t: back
+//   move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
+//   loadGauge(u_local_double_ptr, gauge, T_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+//   loadVector(src_local_double_ptr, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+//   coord_boundary = (grid_t > 1) ? 1 : 0;
+//   if (t >= coord_boundary) {
+// #pragma unroll
+//     for (int i = 0; i < Nc; i++) {
+//       temp1.clear2Zero();
+//       temp2.clear2Zero();
+// #pragma unroll
+//       for (int j = 0; j < Nc; j++) {
+//         // first row vector with col vector
+//         temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+//         // second row vector with col vector
+//         temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+//       }
+//       dst_local[0 * Nc + i] += temp1;
+//       dst_local[2 * Nc + i] += temp1 * flag;
+//       dst_local[1 * Nc + i] += temp2;
+//       dst_local[3 * Nc + i] += temp2 * flag;
+//     }
+//   }
+
+
+//   Complex* dst_global = p.getPointVector(static_cast<Complex *>(fermion_out), Lx, Ly, Lz, Lt);
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     dst_global[i] = dst_local[i];
+//   }
+  
+// }
 
 
 void NewDslash::calculateDslash(int invert_flag) {

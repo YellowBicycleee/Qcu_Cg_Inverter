@@ -208,11 +208,11 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
       double temp1_reg[2] = {0, 0};
       double temp2_reg[2] = {0, 0};
 
-      temp1.clear2Zero();
-      temp2.clear2Zero();
+      // temp1.clear2Zero();
+      // temp2.clear2Zero();
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
-        temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+        // temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
         temp1_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
                      + flag * src_local_double_ptr[(3 * Nc + j) * 2 + 1]);
         temp1_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
@@ -259,22 +259,53 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
   if (x >= coord_boundary) {
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
-      temp1.clear2Zero();
-      temp2.clear2Zero();
+      // temp1.clear2Zero();
+      // temp2.clear2Zero();
+      double temp_res1[2] = {0, 0};
+      double temp_res2[2] = {0, 0};
+
+      double temp1_reg[2] = {0, 0};
+      double temp2_reg[2] = {0, 0};
 #pragma unroll
       for (int j = 0; j < Nc; j++) {
         // first row vector with col vector
         temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
               u_local[j * Nc + i].conj(); // transpose and conj
+        temp1_reg[0] = (src_local_double_ptr[(0 * Nc + j) * 2 + 0] \
+                     - flag * src_local_double_ptr[(3 * Nc + j) * 2 + 1]);
+        temp1_reg[1] = (src_local_double_ptr[(0 * Nc + j) * 2 + 1] \
+                     + flag * src_local_double_ptr[(3 * Nc + j) * 2 + 0]);
 
+        temp_res1[0] += temp1_reg[0] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
+                      - temp1_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
+        temp_res1[1] += temp1_reg[0] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
+                      + temp1_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
         // second row vector with col vector
-        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
-              u_local[j * Nc + i].conj(); // transpose and conj
+        // temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+              // u_local[j * Nc + i].conj(); // transpose and conj
+        temp2_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
+                      - flag * src_local_double_ptr[(2 * Nc + j) * 2 + 1]);
+        temp2_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
+                      + flag * src_local_double_ptr[(2 * Nc + j) * 2 + 0]);
+
+        temp_res2[0] += temp2_reg[0] * u_local_double_ptr[(i * Nc + j) * 2 + 0] \
+                      - temp2_reg[1] * (-u_local_double_ptr[(i * Nc + j) * 2 + 1]);
+        temp_res2[1] += temp2_reg[0] * (-u_local_double_ptr[(i * Nc + j) * 2 + 1]) \
+                      + temp2_reg[1] * u_local_double_ptr[(i * Nc + j) * 2 + 0];
       }
-      dst_local[0 * Nc + i] += temp1;
-      dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
-      dst_local[1 * Nc + i] += temp2;
-      dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
+      // dst_local[0 * Nc + i] += temp1;
+      // dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
+      dst_local_double_ptr[(0 * Nc + i) * 2 + 0] += temp_res1[0];
+      dst_local_double_ptr[(0 * Nc + i) * 2 + 1] += temp_res1[1];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += flag * temp_res1[1];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += -flag * temp_res1[0];
+
+      // dst_local[1 * Nc + i] += temp2;
+      // dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
+      dst_local_double_ptr[(2 * Nc + i) * 2 + 0] += flag * temp_res1[1];
+      dst_local_double_ptr[(2 * Nc + i) * 2 + 1] += -flag * temp_res1[0];
     }
   }
 

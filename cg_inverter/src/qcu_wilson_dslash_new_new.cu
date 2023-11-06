@@ -491,7 +491,7 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       // temp1.clear2Zero();
-      // temp2.clear2Zero();
+      temp2.clear2Zero();
       temp_res1[0] = temp_res1[1] = 0;
       temp_res2[0] = temp_res2[1] = 0;
 #pragma unroll
@@ -515,14 +515,14 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
         // temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) *
         //       u_local[j * Nc + i].conj(); // transpose and conj
         temp_reg[0] = (src_local_double_ptr[(1 * Nc + j) * 2 + 0] \
-                    + (-src_local_double_ptr[(3 * Nc + j) * 2 + 1] * flag));
+                    - (-src_local_double_ptr[(3 * Nc + j) * 2 + 1] * flag));
         temp_reg[1] = (src_local_double_ptr[(1 * Nc + j) * 2 + 1] \
-                    + (src_local_double_ptr[(3 * Nc + j) * 2 + 0] * flag));
+                    - (src_local_double_ptr[(3 * Nc + j) * 2 + 0] * flag));
 
-        temp_res2[0] += temp_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
-                      - temp_reg[3] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
-        temp_res2[1] += temp_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
-                      + temp_reg[3] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
+        temp_res2[0] += temp_reg[0] * u_local_double_ptr[(j * Nc + i) * 2 + 0] \
+                      - temp_reg[1] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]);
+        temp_res2[1] += temp_reg[0] * (-u_local_double_ptr[(j * Nc + i) * 2 + 1]) \
+                      + temp_reg[1] * u_local_double_ptr[(j * Nc + i) * 2 + 0];
       }
       // dst_local[0 * Nc + i] += temp1;
       // dst_local[2 * Nc + i] += temp1.multipy_minus_i() * flag;
@@ -533,10 +533,10 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
 
       // dst_local[1 * Nc + i] += temp2;
       // dst_local[3 * Nc + i] += temp2.multipy_i() * flag;
-      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res1[0];
-      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res1[1];
-      dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += -flag * temp_res1[1];
-      dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += flag * temp_res1[0];
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 0] += temp_res2[0];
+      dst_local_double_ptr[(1 * Nc + i) * 2 + 1] += temp_res2[1];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 0] += -flag * temp_res2[1];
+      dst_local_double_ptr[(3 * Nc + i) * 2 + 1] += flag * temp_res2[0];
     }
 #endif
   }

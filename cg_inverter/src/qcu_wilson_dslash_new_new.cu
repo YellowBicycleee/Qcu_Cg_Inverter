@@ -16,10 +16,10 @@ extern int grid_z;
 extern int grid_t;
 extern MPICommunicator *mpi_comm;
 
-static void* coalesced_fermion_in;
-static void* coalesced_fermion_out;
-static void* coalesced_gauge;
-extern void* qcu_gauge;
+// static void* coalesced_fermion_in;
+// static void* coalesced_fermion_out;
+// static void* coalesced_gauge;
+// extern void* qcu_gauge;
 
 
 
@@ -152,7 +152,7 @@ __device__ inline void loadVector(double* src_local, void* fermion_in, const Poi
 
 static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, double flag_param) {
   assert(parity == 0 || parity == 1);
-  __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
+  // __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
 
   Lx >>= 1;
 
@@ -176,8 +176,8 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
   double* src_local_double_ptr = reinterpret_cast<double*>(src_local);
   double* dst_local_double_ptr = reinterpret_cast<double*>(dst_local);
   // Complex temp;
-  Complex temp1;
-  Complex temp2;
+  // Complex temp1;
+  // Complex temp2;
 
   double temp_reg[2];
   double temp_res1[2];
@@ -607,7 +607,7 @@ static __global__ void mpiDslashNew(void *gauge, void *fermion_in, void *fermion
 #pragma unroll
     for (int i = 0; i < Nc; i++) {
       // temp1.clear2Zero();
-      temp2.clear2Zero();
+      // temp2.clear2Zero();
       temp_res1[0] = temp_res1[1] = 0;
       temp_res2[0] = temp_res2[1] = 0;
 #pragma unroll
@@ -696,11 +696,11 @@ void NewDslash::calculateDslash(int invert_flag) {
 
 
 void callNewDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
-  int Lx = param->lattice_size[0];
-  int Ly = param->lattice_size[1];
-  int Lz = param->lattice_size[2];
-  int Lt = param->lattice_size[3];
-  int vol = Lx * Ly * Lz * Lt;
+  // int Lx = param->lattice_size[0];
+  // int Ly = param->lattice_size[1];
+  // int Lz = param->lattice_size[2];
+  // int Lt = param->lattice_size[3];
+  // int vol = Lx * Ly * Lz * Lt;
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   NewDslash dslash_solver(dslash_param);
   dslash_solver.calculateDslash(0);

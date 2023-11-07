@@ -11,13 +11,13 @@ private:
   int parity_;
 public:
   Point() = default;
-  __device__ Point(const Point& rhs) : x_(rhs.x_), y_(rhs.y_), z_(rhs.z_), t_(rhs.t_), parity_(rhs.parity_) {}
-  __device__ Point(int x, int y, int z, int t, int parity) : x_(x), y_(y), z_(z), t_(t), parity_(parity) {}
+  __device__ __forceinline__ Point(const Point& rhs) : x_(rhs.x_), y_(rhs.y_), z_(rhs.z_), t_(rhs.t_), parity_(rhs.parity_) {}
+  __device__ __forceinline__ Point(int x, int y, int z, int t, int parity) : x_(x), y_(y), z_(z), t_(t), parity_(parity) {}
   // __device__ void outputInfo() {
   //   printf("Point: (x,y,z,t)=(%d, %d, %d, %d), parity = %d\n", x_, y_, z_, t_, parity_);
   // }
-  __device__ int getParity() const { return parity_;}
-  __device__ Point move(int front_back, int direction, int Lx, int Ly, int Lz, int Lt) const{ // direction +-1234
+  __device__ __forceinline__ int getParity() const { return parity_;}
+  __device__ __forceinline__ Point move(int front_back, int direction, int Lx, int Ly, int Lz, int Lt) const{ // direction +-1234
     // 1-front 0-back
     assert(abs(direction) >= 0 && abs(direction) < 4);
     assert(front_back == BACK || front_back == FRONT);
@@ -62,25 +62,25 @@ public:
     }
   }
 
-  __device__ Complex* getPointGauge(Complex* origin, int direction, int Lx, int Ly, int Lz, int Lt) const{
+  __device__ __forceinline__ Complex* getPointGauge(Complex* origin, int direction, int Lx, int Ly, int Lz, int Lt) const{
     return origin + (((((((direction << 1) + parity_) * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * Nc * Nc;
   }
 
 
-  __device__ Complex* getPointVector(Complex* origin, int Lx, int Ly, int Lz, int Lt) const{
+  __device__ __forceinline__ Complex* getPointVector(Complex* origin, int Lx, int Ly, int Lz, int Lt) const{
     return origin + (((t_ * Lz + z_) * Ly + y_) * Lx + x_) * Ns * Nc;
   }
 
-  __device__ double* getCoalescedVectorAddr (void* origin, int Lx, int Ly, int Lz, int Lt) const{
+  __device__ __forceinline__ double* getCoalescedVectorAddr (void* origin, int Lx, int Ly, int Lz, int Lt) const{
     return static_cast<double*>(origin) + (((t_ * Lz + z_) * Ly + y_) * Lx + x_);
   }
-  __device__ double* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt) const{
+  __device__ __forceinline__ double* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt) const{
     return static_cast<double*>(origin) + (direction * 2 + parity_)* sub_Lx * Ly * Lz * Lt * Nc * (Nc - 1) * 2 + (((t_ * Lz + z_) * Ly + y_) * sub_Lx + x_);
     // direction <<1 thread_id;
     // return origin + (((((((direction << 1) + parity_) * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * Nc * Nc;
   }
 
-  __device__ Point& operator= (const Point& rhs) {
+  __device__ __forceinline__ Point& operator= (const Point& rhs) {
     x_ = rhs.x_;
     y_ = rhs.y_;
     z_ = rhs.z_;
@@ -88,7 +88,7 @@ public:
     parity_ = rhs.parity_;
     return *this;
   }
-  __device__ Complex* getPointClover(Complex* origin, int Lx, int Ly, int Lz, int Lt) const{
+  __device__ __forceinline__ Complex* getPointClover(Complex* origin, int Lx, int Ly, int Lz, int Lt) const{
     return origin + (((((parity_ * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * (Nc * Ns * Nc * Ns / 2);
   }
 

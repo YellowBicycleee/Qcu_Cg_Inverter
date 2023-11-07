@@ -71,13 +71,11 @@ public:
     return origin + (((t_ * Lz + z_) * Ly + y_) * Lx + x_) * Ns * Nc;
   }
 
-  __device__ __forceinline__ double* getCoalescedVectorAddr (void* origin, int Lx, int Ly, int Lz, int Lt) const{
-    return static_cast<double*>(origin) + (((t_ * Lz + z_) * Ly + y_) * Lx + x_);
+  __device__ __forceinline__ Complex* getCoalescedVectorAddr (void* origin, int Lx, int Ly, int Lz, int Lt) const{
+    return static_cast<Complex*>(origin) + (((t_ * Lz + z_) * Ly + y_) * Lx + x_);
   }
-  __device__ __forceinline__ double* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt) const{
-    return static_cast<double*>(origin) + (direction * 2 + parity_)* sub_Lx * Ly * Lz * Lt * Nc * (Nc - 1) * 2 + (((t_ * Lz + z_) * Ly + y_) * sub_Lx + x_);
-    // direction <<1 thread_id;
-    // return origin + (((((((direction << 1) + parity_) * Lt + t_) * Lz + z_) * Ly + y_) * Lx) + x_) * Nc * Nc;
+  __device__ __forceinline__ Complex* getCoalescedGaugeAddr (void* origin, int direction, int sub_Lx, int Ly, int Lz, int Lt) const{
+    return static_cast<Complex*>(origin) + (direction * 2 + parity_)* sub_Lx * Ly * Lz * Lt * Nc * (Nc - 1) + (((t_ * Lz + z_) * Ly + y_) * sub_Lx + x_);
   }
 
   __device__ __forceinline__ Point& operator= (const Point& rhs) {

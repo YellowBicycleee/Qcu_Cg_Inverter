@@ -1,4 +1,4 @@
-#include "qcu_shift_storage.cuh"
+#include "qcu_shift_storage_complex.cuh"
 #include <cstdio>
 #include "qcu_macro.cuh"
 
@@ -100,7 +100,7 @@ static __global__ void shift_vector_to_noncoalesed (void* dst_vec, void* src_vec
   int thread_id = blockDim.x * blockIdx.x + threadIdx.x;
 
   // double* dst_vec_pointer = static_cast<double*>(dst_vec) + thread_id * Ns * Nc * 2;
-  double* src_vec_pointer = static_cast<double*>(src_vec) + thread_id;
+  double* src_vec_pointer = static_cast<double*>(src_vec) + thread_id * 2;
 
   double local_vector[Ns * Nc * 2];
 
@@ -136,7 +136,7 @@ static __global__ void shift_gauge_to_coalesed (void* dst_gauge, void* src_gauge
   double* src_gauge_ptr;
   for (int i = 0; i < Nd; i++) {
     for (int parity = 0; parity < 2; parity++) {
-      dst_gauge_ptr = static_cast<double*>(dst_gauge) + (2 * i + parity) * sub_vol * (Nc - 1) * Nc * 2 + (((t * Lz + z) * Ly + y) * sub_Lx + sub_x);
+      dst_gauge_ptr = static_cast<double*>(dst_gauge) + (2 * i + parity) * sub_vol * (Nc - 1) * Nc * 2 + (((t * Lz + z) * Ly + y) * sub_Lx + sub_x) * 2;
       src_gauge_ptr = static_cast<double*>(src_gauge) + (2 * i + parity) * sub_vol * Nc * Nc * 2; //  + (((t * Lz + z) * Ly + y) * sub_Lx + sub_x) * 2 * Nc * Nc;
       loadGaugeBySharedMemory(src_gauge_ptr, local_gauge);
 
@@ -146,7 +146,7 @@ static __global__ void shift_gauge_to_coalesed (void* dst_gauge, void* src_gauge
       // }
       for (int j = 0 ; j < Nc * (Nc-1); j++) {
         dst_gauge_ptr[0] = local_gauge[2 * j];
-        dst_gauge_ptr[0] = local_gauge[2 * j + 1];
+        dst_gauge_ptr[1] = local_gauge[2 * j + 1];
         dst_gauge_ptr += sub_vol * 2;
       }
     }

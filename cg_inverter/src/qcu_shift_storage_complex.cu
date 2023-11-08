@@ -3,7 +3,7 @@
 #include "qcu_macro.cuh"
 
 // DONE: WARP version, no sync  
-static __device__ void storeVectorBySharedMemory(void* origin, void* result) {
+static __device__ __forceinline__ void storeVectorBySharedMemory(void* origin, void* result) {
   __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
   int thread = blockDim.x * blockIdx.x + threadIdx.x;
   int warp_index = (thread - thread / BLOCK_SIZE * BLOCK_SIZE) / WARP_SIZE;//thread % BLOCK_SIZE / WARP_SIZE;
@@ -26,7 +26,7 @@ static __device__ void storeVectorBySharedMemory(void* origin, void* result) {
 }
 
 // DONE: WARP version, no sync  
-static __device__ void loadVectorBySharedMemory(void* origin, void* result) {
+static __device__ __forceinline__ void loadVectorBySharedMemory(void* origin, void* result) {
   __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
   int thread = blockDim.x * blockIdx.x + threadIdx.x;
   int warp_index = (thread - thread / BLOCK_SIZE * BLOCK_SIZE) / WARP_SIZE; //thread % BLOCK_SIZE / WARP_SIZE;
@@ -48,7 +48,7 @@ static __device__ void loadVectorBySharedMemory(void* origin, void* result) {
 }
 
 
-static __device__ void loadGaugeBySharedMemory(void* origin, void* result) {
+static __device__ __forceinline__ void loadGaugeBySharedMemory(void* origin, void* result) {
   __shared__ double shared_buffer[BLOCK_SIZE * Nc * Nc * 2];
   int thread = blockDim.x * blockIdx.x + threadIdx.x;
   int warp_index = (thread - thread / BLOCK_SIZE * BLOCK_SIZE) / WARP_SIZE;//thread % BLOCK_SIZE / WARP_SIZE;

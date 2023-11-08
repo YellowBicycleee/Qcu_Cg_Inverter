@@ -15,13 +15,13 @@ static int process_rank;
 static int process_num;
 // static cudaStream_t stream[Nd][2];  // Nd means dims, 2 means FRONT BACK
 // end
-static __device__ inline void reconstructSU3(Complex *su3)
+static __device__ __forceinline__ void reconstructSU3(Complex *su3)
 {
   su3[6] = (su3[1] * su3[5] - su3[2] * su3[4]).conj();
   su3[7] = (su3[2] * su3[3] - su3[0] * su3[5]).conj();
   su3[8] = (su3[0] * su3[4] - su3[1] * su3[3]).conj();
 }
-static __device__ void copyGauge (Complex* dst, Complex* src) {
+static __device__ __forceinline__ void copyGauge (Complex* dst, Complex* src) {
   for (int i = 0; i < (Nc - 1) * Nc; i++) {
     dst[i] = src[i];
   }
@@ -29,14 +29,14 @@ static __device__ void copyGauge (Complex* dst, Complex* src) {
 }
 
 
-static __device__ inline void loadGauge(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int Lx, int Ly, int Lz, int Lt) {
+static __device__ __forceinline__ void loadGauge(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int Lx, int Ly, int Lz, int Lt) {
   Complex* u = p.getPointGauge(static_cast<Complex*>(gauge_ptr), direction, Lx, Ly, Lz, Lt);
   for (int i = 0; i < (Nc - 1) * Nc; i++) {
     u_local[i] = u[i];
   }
   reconstructSU3(u_local);
 }
-static __device__ inline void loadVector(Complex* src_local, void* fermion_in, const Point& p, int Lx, int Ly, int Lz, int Lt) {
+static __device__ __forceinline__ void loadVector(Complex* src_local, void* fermion_in, const Point& p, int Lx, int Ly, int Lz, int Lt) {
   Complex* src = p.getPointVector(static_cast<Complex *>(fermion_in), Lx, Ly, Lz, Lt);
   for (int i = 0; i < Ns * Nc; i++) {
     src_local[i] = src[i];

@@ -22,7 +22,7 @@ extern void* qcu_gauge;
 
 
 // WARP version, no sync
-static __device__ void storeVectorBySharedMemory(void* shared_ptr, Complex* origin, Complex* result) {
+static __device__ __forceinline__ void storeVectorBySharedMemory(void* shared_ptr, Complex* origin, Complex* result) {
   // result is register variable
   double* shared_buffer = static_cast<double*>(shared_ptr);
   int thread = blockDim.x * blockIdx.x + threadIdx.x;
@@ -43,21 +43,21 @@ static __device__ void storeVectorBySharedMemory(void* shared_ptr, Complex* orig
 
 
 
-static __device__ inline void reconstructSU3(Complex *su3)
+static __device__ __forceinline__ void reconstructSU3(Complex *su3)
 {
   su3[6] = (su3[1] * su3[5] - su3[2] * su3[4]).conj();
   su3[7] = (su3[2] * su3[3] - su3[0] * su3[5]).conj();
   su3[8] = (su3[0] * su3[4] - su3[1] * su3[3]).conj();
 }
 
-__device__ inline void loadGauge(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int Lx, int Ly, int Lz, int Lt) {
+__device__ __forceinline__ void loadGauge(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int Lx, int Ly, int Lz, int Lt) {
   Complex* u = p.getPointGauge(static_cast<Complex*>(gauge_ptr), direction, Lx, Ly, Lz, Lt);
   for (int i = 0; i < (Nc - 1) * Nc; i++) {
     u_local[i] = u[i];
   }
   reconstructSU3(u_local);
 }
-__device__ inline void loadVector(Complex* src_local, void* fermion_in, const Point& p, int Lx, int Ly, int Lz, int Lt) {
+__device__ __forceinline__ void loadVector(Complex* src_local, void* fermion_in, const Point& p, int Lx, int Ly, int Lz, int Lt) {
   Complex* src = p.getPointVector(static_cast<Complex *>(fermion_in), Lx, Ly, Lz, Lt);
   for (int i = 0; i < Ns * Nc; i++) {
     src_local[i] = src[i];
@@ -66,7 +66,7 @@ __device__ inline void loadVector(Complex* src_local, void* fermion_in, const Po
 
 
 
-static __device__ inline void loadGaugeCoalesced(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int sub_Lx, int Ly, int Lz, int Lt) {
+static __device__ __forceinline__ void loadGaugeCoalesced(Complex* u_local, void* gauge_ptr, int direction, const Point& p, int sub_Lx, int Ly, int Lz, int Lt) {
   Complex* start_ptr = p.getCoalescedGaugeAddr (gauge_ptr, direction, sub_Lx, Ly, Lz, Lt);
   int sub_vol = sub_Lx * Ly * Lz * Lt;
   for (int i = 0; i < (Nc - 1) * Nc; i++) {
@@ -76,7 +76,7 @@ static __device__ inline void loadGaugeCoalesced(Complex* u_local, void* gauge_p
   reconstructSU3(u_local);
 }
 
-static __device__ inline void loadVectorCoalesced(Complex* src_local, void* fermion_in, const Point& p, int half_Lx, int Ly, int Lz, int Lt) {
+static __device__ __forceinline__ void loadVectorCoalesced(Complex* src_local, void* fermion_in, const Point& p, int half_Lx, int Ly, int Lz, int Lt) {
   Complex* start_ptr = p.getCoalescedVectorAddr (fermion_in, half_Lx, Ly, Lz, Lt);
   int sub_vol = half_Lx * Ly * Lz * Lt;
 
@@ -86,7 +86,7 @@ static __device__ inline void loadVectorCoalesced(Complex* src_local, void* ferm
   }
 }
 
-static __device__ inline void storeVectorCoalesced(Complex* dst_local, void* fermion_out, const Point& p, int half_Lx, int Ly, int Lz, int Lt) {
+static __device__ __forceinline__ void storeVectorCoalesced(Complex* dst_local, void* fermion_out, const Point& p, int half_Lx, int Ly, int Lz, int Lt) {
   Complex* start_ptr = p.getCoalescedVectorAddr (fermion_out, half_Lx, Ly, Lz, Lt);
   int sub_vol = half_Lx * Ly * Lz * Lt;
 

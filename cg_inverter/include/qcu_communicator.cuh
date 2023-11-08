@@ -172,4 +172,9 @@ public:
   void interprocess_sax_barrier (void* x, void* scalar, int vol);
   void freeBuffer();
   void freeGaugeBuffer();
+
+
+
+  // TODO
+  // void interprocess_vector_norm(void* vector, double* result, int vector_length);
 };

@@ -38,26 +38,6 @@ void loadQcuGauge(void* gauge, QcuParam *param) {
 
 
 
-// void getDeviceInfo() {
-//   cudaDeviceProp deviceProp;
-//   int deviceCount;
-//   cudaError_t cudaError;
-//   cudaError = cudaGetDeviceCount(&deviceCount);
-//   for (int i = 0; i < deviceCount; i++) {
-//     cudaError = cudaGetDeviceProperties(&deviceProp, i);
-
-//     cout << "设备 " << i + 1 << " 的主要属性： " << endl;
-//     cout << "设备显卡型号： " << deviceProp.name << endl;
-//     cout << "设备全局内存总量（以MB为单位）： " << deviceProp.totalGlobalMem / 1024 / 1024 << endl; 
-//     cout << "设备上一个线程块（Block）中可用的最大共享内存（以KB为单位）： " << deviceProp.sharedMemPerBlock / 1024 << endl;  
-//     cout << "设备上一个线程块（Block）种可用的32位寄存器数量： " << deviceProp.regsPerBlock << endl;
-//     cout << "设备上一个线程块（Block）可包含的最大线程数量： " << deviceProp.maxThreadsPerBlock << endl;
-//     cout << "设备的计算功能集（Compute Capability）的版本号： " << deviceProp.major << "." << deviceProp.minor << endl;
-//     cout << "设备上多处理器的数量： " << deviceProp.multiProcessorCount << endl;
-//   }
-
-// }
-
 
 
 void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity) {
@@ -70,7 +50,9 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // wilsonDslashOneRound(fermion_out, fermion_in, gauge, param, parity);
   // callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
 
-  callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
+  callWilsonDslash(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
+  // callWilsonDslashFull(fermion_out, fermion_in, gauge, param, parity, 0);
+
 
   // callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);

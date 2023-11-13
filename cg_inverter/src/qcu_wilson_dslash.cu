@@ -35,29 +35,6 @@ static __device__ void storeVectorBySharedMemory(void* shared_ptr, Complex* orig
 }
 
 
-
-// // WARP version, no sync
-// static __device__ void loadVectorBySharedMemory(void* shared_ptr, Complex* origin, Complex* result) {
-//   // result is register variable
-//   // __shared__ double shared_buffer[2 * Ns * Nc * BLOCK_SIZE];
-//   double* shared_buffer = static_cast<double*>(shared_ptr);
-//   int thread = blockDim.x * blockIdx.x + threadIdx.x;
-//   int warp_index = (thread - thread / BLOCK_SIZE * BLOCK_SIZE) / WARP_SIZE;//thread % BLOCK_SIZE / WARP_SIZE;
-//   Complex* shared_dst = reinterpret_cast<Complex*>(shared_buffer) + threadIdx.x * Ns * Nc;
-//   Complex* warp_dst = origin + (thread / WARP_SIZE * WARP_SIZE) * Ns * Nc;
-//   double* double_dst = reinterpret_cast<double*>(warp_dst);
-
-//   // store result of shared memory to global memory
-//   for (int i = threadIdx.x - threadIdx.x / WARP_SIZE * WARP_SIZE; i < WARP_SIZE * Ns * Nc * 2; i += WARP_SIZE) {
-//     shared_buffer[warp_index * WARP_SIZE * Ns * Nc * 2 + i] = double_dst[i];
-//   }
-//   // store result to shared memory
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     result[i] = shared_dst[i];
-//   }
-// }
-
-
 static __device__ inline void reconstructSU3(Complex *su3)
 {
   su3[6] = (su3[1] * su3[5] - su3[2] * su3[4]).conj();
@@ -79,188 +56,7 @@ __device__ inline void loadVector(Complex* src_local, void* fermion_in, const Po
   }
 }
 
-// __global__ void gpuDslash(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity)
-// {
-//   assert(parity == 0 || parity == 1);
 
-//   __shared__ double shared_output_vec[BLOCK_SIZE * Ns * Nc * 2];
-//   Lx >>= 1;
-
-//   int thread = blockIdx.x * blockDim.x + threadIdx.x;
-//   int t = thread / (Lz * Ly * Lx);
-//   int z = thread % (Lz * Ly * Lx) / (Ly * Lx);
-//   int y = thread % (Ly * Lx) / Lx;
-//   int x = thread % Lx;
-
-//   Complex u_local[Nc * Nc];   // for GPU
-//   Complex src_local[Ns * Nc]; // for GPU
-//   Complex dst_local[Ns * Nc]; // for GPU
-
-//   Point p(x, y, z, t, parity);
-//   Point move_point;
-
-
-//   Complex temp;
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     dst_local[i].clear2Zero();
-//   }
-
-//   // \mu = 1
-//   loadGauge(u_local, gauge, 0, p, Lx, Ly, Lz, Lt);
-//   move_point = p.move(FRONT, 0, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] - src_local[3 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += temp * Complex(0, 1);
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += temp * Complex(0, 1);
-//     }
-//   }
-
-//   move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
-//   loadGauge(u_local, gauge, 0, move_point, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] + src_local[3 * Nc + j] * Complex(0, 1)) *
-//              u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += temp * Complex(0, -1);
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] + src_local[2 * Nc + j] * Complex(0, 1)) *
-//              u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += temp * Complex(0, -1);
-//     }
-//   }
-
-//   // \mu = 2
-//   loadGauge(u_local, gauge, 1, p, Lx, Ly, Lz, Lt);
-//   move_point = p.move(FRONT, 1, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] + src_local[3 * Nc + j]) * u_local[i * Nc + j];
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += temp;
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j]) * u_local[i * Nc + j];
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += -temp;
-//     }
-//   }
-
-//   move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
-//   loadGauge(u_local, gauge, 1, move_point, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] - src_local[3 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += -temp;
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] + src_local[2 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += temp;
-//     }
-//   }
-
-//   // \mu = 3
-//   loadGauge(u_local, gauge, 2, p, Lx, Ly, Lz, Lt);
-//   move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += temp * Complex(0, 1);
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] + src_local[3 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += temp * Complex(0, -1);
-//     }
-//   }
-
-//   move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
-//   loadGauge(u_local, gauge, 2, move_point, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] + src_local[2 * Nc + j] * Complex(0, 1)) *
-//              u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += temp * Complex(0, -1);
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * Complex(0, 1)) *
-//              u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += temp * Complex(0, 1);
-//     }
-//   }
-
-//   // \mu = 4
-//   loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
-//   move_point = p.move(FRONT, 3, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j]) * u_local[i * Nc + j];
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += -temp;
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j]) * u_local[i * Nc + j];
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += -temp;
-//     }
-//   }
-
-//   move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
-//   loadGauge(u_local, gauge, 3, move_point, Lx, Ly, Lz, Lt);
-//   loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] + src_local[2 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += temp;
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] + src_local[3 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += temp;
-//     }
-//   }
-
-//   // store result
-//   double *dest = static_cast<double *>(fermion_out) + (blockIdx.x * BLOCK_SIZE) * Ns * Nc * 2;
-//   double *dest_temp_double = (double *)dst_local;
-//   for (int i = 0; i < Ns * Nc * 2; i++) {
-//     shared_output_vec[threadIdx.x * Ns * Nc * 2 + i] = dest_temp_double[i];
-//   }
-//   __syncthreads();
-//   // load to global memory
-//   for (int i = threadIdx.x; i < BLOCK_SIZE * Ns * Nc * 2; i += BLOCK_SIZE) {
-//     dest[i] = shared_output_vec[i];
-//   }
-// }
 
 static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, void* flag_ptr) {
   assert(parity == 0 || parity == 1);
@@ -495,21 +291,16 @@ void MpiWilsonDslash::calculateDslash(int invert_flag) {
 }
 
 
-// void WilsonDslash();
-// void callWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity) {
-//   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
-//   WilsonDslash dslash_solver(dslash_param);
-//   dslash_solver.calculateDslash();
-// }
+
 void callMpiWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   MpiWilsonDslash dslash_solver(dslash_param);
-  dslash_solver.calculateDslash();
+  dslash_solver.calculateDslash(0);
 }
 
 
 // this fermion in is the start addr of all
-void wilsonDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+void wilsonDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
 
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
@@ -518,15 +309,12 @@ void wilsonDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
   int vol = Lx * Ly * Lz * Lt;
   int half_vol = vol / 2;
 
-  // Dslash when invert_flag is 0, else if 1---->Dslash dagger
+  // Dslash when dagger_flag is 0, else if 1---->Dslash dagger
   for (int parity = 0; parity < 2; parity++) {
     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
-    callMpiWilsonDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
+    callMpiWilsonDslash(half_fermion_out, half_fermion_in, gauge, param, parity, dagger_flag);
   }
-
-  // checkCudaErrors(cudaFree(d_coeff));
-  // checkCudaErrors(cudaFree(d_kappa));
 }
 
 void fullWilsonDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {

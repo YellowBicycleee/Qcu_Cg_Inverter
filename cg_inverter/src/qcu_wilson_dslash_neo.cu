@@ -466,8 +466,6 @@ void WilsonDslash::calculateDslashFull(double kappa, int dagger_flag) {
 
 static __global__ void mpiDslashNaive(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, double flag_param) {
   assert(parity == 0 || parity == 1);
-  // __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
-  // __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
 
   Lx >>= 1;
 

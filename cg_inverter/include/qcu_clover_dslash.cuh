@@ -22,5 +22,8 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
 // void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param);
 void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, void* temp);
 void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);
-void preCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);
+// void preCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);
 void newFullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);
+
+void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag);
+void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag);

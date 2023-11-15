@@ -16,6 +16,7 @@
 #include "qcu_wilson_dslash.cuh"
 #include "qcu_shift_storage_complex.cuh"
 #include "qcu_wilson_dslash_new_new.cuh"
+// #include "qcu_co"
 #include <iostream>
 using std::cout;
 using std::endl;
@@ -36,7 +37,26 @@ void loadQcuGauge(void* gauge, QcuParam *param) {
 }
 
 
+// gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result)
+void test_norm2 (void* fermion_in, int vol) {
+  void* d_temp_res;
+  void* d_result;
+  int vec_length = Ns * Nc * vol;
+  double result;
 
+
+  checkCudaErrors(cudaMalloc(&d_temp_res, vec_length * sizeof(Complex)));
+  checkCudaErrors(cudaMalloc(&d_result, sizeof(double)));
+  gpu_vector_norm2(fermion_in, d_temp_res, vec_length, d_result);
+
+  checkCudaErrors(cudaMemcpy(&result, d_result, sizeof(double), cudaMemcpyDeviceToHost));
+
+  printf(RED"result of norm2 is %lf\n", result);
+  printf(CLR"");
+
+  checkCudaErrors(cudaFree(d_result));
+  checkCudaErrors(cudaFree(d_temp_res));
+}
 
 
 
@@ -58,7 +78,8 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
   // calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNewDslash(fermion_out, fermion_in, gauge, param, parity, 0);
-  callNewDslashCoalesced(fermion_out, fermion_in, gauge, param, parity, 0);
+  // callNewDslashCoalesced(fermion_out, fermion_in, gauge, param, parity, 0);
+  test_norm2(fermion_in, param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3]);
 }
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);

@@ -898,8 +898,36 @@ void CloverDslash::calculateDslash(int invert_flag) {
 //   dslash_solver.calculateDslash(invert_flag);
 // }
 
+void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+  // cloverResult(void* p_fermion_out, void* p_clover_matrix, int Lx, int Ly, int Lz, int Lt, int parity);
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
 
-void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  CloverDslash dslash_solver(dslash_param);
+
+  dslash_solver.cloverResult(fermion_out, clover_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+}
+
+
+void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  // int vol = Lx * Ly * Lz * Lt;
+  // int half_vol = vol / 2;
+
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  CloverDslash dslash_solver(dslash_param);
+
+  dslash_solver.inverseCloverResult(fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+}
+
+
+void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
   int Lz = param->lattice_size[2];
@@ -909,14 +937,27 @@ void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuPa
   for (int parity = 0; parity < 2; parity++) {
     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
-
-    DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
-    CloverDslash dslash_solver(dslash_param);
-    //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
-
-    dslash_solver.inverseCloverResult(half_fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+    invertCloverDslashHalf (half_fermion_out, half_fermion_in, gauge, param, parity, dagger_flag);
   }
 }
+// void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+//   int Lx = param->lattice_size[0];
+//   int Ly = param->lattice_size[1];
+//   int Lz = param->lattice_size[2];
+//   int Lt = param->lattice_size[3];
+//   int vol = Lx * Ly * Lz * Lt;
+//   int half_vol = vol / 2;
+//   for (int parity = 0; parity < 2; parity++) {
+//     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
+//     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
+
+//     DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
+//     CloverDslash dslash_solver(dslash_param);
+//     //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
+
+//     dslash_solver.inverseCloverResult(half_fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+//   }
+// }
 void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   CloverDslash dslash_solver(dslash_param);
@@ -924,24 +965,24 @@ void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam
 }
 
 
-void preCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
-  int Lx = param->lattice_size[0];
-  int Ly = param->lattice_size[1];
-  int Lz = param->lattice_size[2];
-  int Lt = param->lattice_size[3];
-  int vol = Lx * Ly * Lz * Lt;
-  int half_vol = vol / 2;
-  for (int parity = 0; parity < 2; parity++) {
-    void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
-    void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
+// void preCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+//   int Lx = param->lattice_size[0];
+//   int Ly = param->lattice_size[1];
+//   int Lz = param->lattice_size[2];
+//   int Lt = param->lattice_size[3];
+//   int vol = Lx * Ly * Lz * Lt;
+//   int half_vol = vol / 2;
+//   for (int parity = 0; parity < 2; parity++) {
+//     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
+//     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
 
-    DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
-    CloverDslash dslash_solver(dslash_param);
-    //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
+//     DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
+//     CloverDslash dslash_solver(dslash_param);
+//     //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
 
-    dslash_solver.inverseCloverResult(half_fermion_out, clover_matrix, Lx, Ly, Lz, Lt, parity); // Clover
-  }
-}
+//     dslash_solver.inverseCloverResult(half_fermion_out, clover_matrix, Lx, Ly, Lz, Lt, parity); // Clover
+//   }
+// }
 
 
 

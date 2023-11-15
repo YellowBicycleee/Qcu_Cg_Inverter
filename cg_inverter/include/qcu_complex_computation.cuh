@@ -15,6 +15,8 @@ void gpu_inner_product (void* x, void* y, void* result, void* partial_result, in
 
 void gpu_sclar_multiply_vector (void* x, void* scalar, int vol);
 
+void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result);
+
 #ifdef USE_MPI
 
 #endif

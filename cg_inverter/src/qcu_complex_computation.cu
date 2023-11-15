@@ -133,3 +133,98 @@ void gpu_saxpy(void* x, void* y, void* scalar, int vol) {
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+
+
+
+
+__global__ void norm2_gpu (void* vector, void* partial_result, int vector_length, void* result){
+  int thread_id = threadIdx.x + blockDim.x * blockIdx.x;
+  int thread_in_block = threadIdx.x;
+  int vol = gridDim.x * blockDim.x;
+  double temp = 0;
+  double temp_res = 0;
+  int stride;
+  int last_stride;
+
+  __shared__ double cache_res[MAX_BLOCK_SIZE];
+
+  if (thread_id < vector_length) {
+    Complex *start_ptr = static_cast<Complex*>(vector);
+    temp = 0;
+    temp_res = 0;
+    for (int i = thread_id; i < vector_length; i += vol) {
+      temp = start_ptr[i].norm2();
+      temp_res += temp * temp;
+    }
+
+    // reduce
+    cache_res[thread_in_block] = temp_res;
+    __syncthreads();
+    last_stride = blockDim.x;
+    stride = last_stride / 2;
+    while (stride > 0 && thread_in_block < stride) {
+      if (thread_in_block + stride < last_stride) {
+        cache_res[thread_in_block] += cache_res[thread_in_block + stride];
+        last_stride /= 2;
+        stride /= 2;
+      }
+      __syncthreads();
+    }
+
+    // store
+    if (thread_in_block == 0) {
+      *(static_cast<double*>(partial_result) + blockIdx.x) = cache_res[0];
+    }
+  }
+}
+
+__global__ void reduce_norm2_gpu(void* partial_result, int partial_length) {
+  int thread_in_block = threadIdx.x;
+  int stride, last_stride;
+
+  double temp = 0;
+  double* src = static_cast<double*>(partial_result);
+
+  __shared__ double cache[MAX_BLOCK_SIZE];
+
+  for (int i = thread_in_block; i < partial_length; i+= BLOCK_SIZE) {
+    temp += src[i];
+  }
+  cache[thread_in_block] = temp;
+  __syncthreads();
+  // reduce in block
+  last_stride = blockDim.x;
+  stride = last_stride / 2;
+  while (stride > 0 && thread_in_block < stride) {
+    if (thread_in_block + stride < last_stride) {
+      cache[thread_in_block] += cache[thread_in_block + stride];
+    }
+    stride /= 2;
+    last_stride /= 2;
+    __syncthreads();
+  }
+  if (thread_in_block == 0) {
+    *(static_cast<double*>(partial_result) + thread_in_block) = cache[0];
+  }
+}
+
+
+void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result) {
+  int block_size = MAX_BLOCK_SIZE;
+  int grid_size = (vector_length + block_size * Ns * Nc -1 ) / (block_size * Ns * Nc);
+
+  norm2_gpu<<<grid_size, block_size>>> (vector, temp_res, vector_length, result);
+  checkCudaErrors(cudaDeviceSynchronize());
+  // reduce
+  reduce_norm2_gpu<<<1, block_size>>>(temp_res, grid_size);
+  double square_norm2;
+  double res;
+  checkCudaErrors(cudaMemcpy(&square_norm2, temp_res, sizeof(double), cudaMemcpyDeviceToHost));
+  res = sqrt(square_norm2);
+  checkCudaErrors(cudaMemcpy(result, &res, sizeof(double), cudaMemcpyHostToDevice));
+#ifdef DEBUG
+  printf(RED"file <%s>, line <%d>, function <%s>, norm2 in process = %lf\n", __FILE__, __LINE__, __FUNCTION__, res);
+  printf(CLR"");
+#endif
+}
+

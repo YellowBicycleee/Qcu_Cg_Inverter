@@ -99,6 +99,7 @@ static void compare_vectors_kernel(void* a_vec, void* b_vec, void* partial_resul
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+
 // res_vec and partial_vec does not store any outside information, 
 //    just to avoid repeating memory allocating
 // bool if_converge(void* b_vec, void* x_vec, void* res_vec, void* partial_vec, void* gauge, QcuParam *param, void* temporary_vector) {
@@ -309,7 +310,7 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   clearVector(x_vector, vol);   // x <- 0
   // fullCloverDslashOneRound (d_new_b, b_vector, gauge, param, 1);  // new_b <- Dslash_dagger b
   checkCudaErrors(cudaMemcpy(temporary_vector, b_vector, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToDevice));
-  invertCloverDslash (temporary_vector, temporary_vector, gauge, param, 0);
+  invertCloverDslash (temporary_vector, temporary_vector, gauge, param);//, 0);
   // dagger
   newFullCloverDslashOneRound (d_new_b, temporary_vector, gauge, param, 1);
 

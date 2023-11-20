@@ -4,7 +4,7 @@
 #include "qcu_macro.cuh"
 #include <cuda_runtime.h>
 
-#define DEBUG
+// #define DEBUG
 
 // DESCRIBE：  x = ax
 static __global__ void sclar_multiply_vector_gpu (void* x, void* a, int vol) {

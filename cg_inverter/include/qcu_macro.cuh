@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdio.h>
 // #define DEBUG
 #define N 6
 #define RED "\033[31m"
@@ -9,14 +10,7 @@
 #define Nc 3
 #define Nd 4
 #define Ns 4
-// #define X_FRONT 1
-// #define X_BACK -1
-// #define Y_FRONT 2
-// #define Y_BACK -2
-// #define Z_FRONT 3
-// #define Z_BACK -3
-// #define T_FRONT 4
-// #define T_BACK -4
+
 
 #define X_DIRECTION 0
 #define Y_DIRECTION 1
@@ -41,3 +35,41 @@
     }                                                                                                                 \
   }
 
+
+__forceinline__ void qcuCudaMemcpy(void * dst, const void * src, size_t count, enum cudaMemcpyKind kind) {
+  cudaError_t err = cudaMemcpy(dst, src, count, kind);
+  if (err != cudaSuccess) {
+    fprintf(stderr, "checkCudaErrors() API error = %04d \"%s\" from file <%s>, line %i.\n", \
+             err, cudaGetErrorString(err), __FILE__, __LINE__);
+    exit(-1);
+  }
+}
+
+__forceinline__ void qcuCudaMalloc(void** devPtr, size_t size) {
+  // cudaError_t cudaMalloc (void **devPtr, size_t  size );
+  cudaError_t err = cudaMalloc(devPtr, size);
+  if (err != cudaSuccess) {
+    fprintf(stderr, "checkCudaErrors() API error = %04d \"%s\" from file <%s>, line %i.\n", \
+             err, cudaGetErrorString(err), __FILE__, __LINE__);
+    exit(-1);
+  }
+}
+
+__forceinline__ void qcuCudaFree(void* ptr) {
+  cudaError_t err = cudaFree(ptr);
+  if (err != cudaSuccess) {
+    fprintf(stderr, "checkCudaErrors() API error = %04d \"%s\" from file <%s>, line %i.\n", \
+             err, cudaGetErrorString(err), __FILE__, __LINE__);
+    exit(-1);
+  }
+}
+
+
+__forceinline__ void qcuCudaDeviceSynchronize() {
+  cudaError_t err = cudaDeviceSynchronize();
+  if (err != cudaSuccess) {
+    fprintf(stderr, "checkCudaErrors() API error = %04d \"%s\" from file <%s>, line %i.\n", \
+             err, cudaGetErrorString(err), __FILE__, __LINE__);
+    exit(-1);
+  }
+}

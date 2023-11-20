@@ -78,8 +78,8 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
   // calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNewDslash(fermion_out, fermion_in, gauge, param, parity, 0);
-  // callNewDslashCoalesced(fermion_out, fermion_in, gauge, param, parity, 0);
-  test_norm2(fermion_in, param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3]);
+  callNewDslashCoalesced(fermion_out, fermion_in, gauge, param, parity, 0);
+  // test_norm2(fermion_in, param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3]);
 }
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);

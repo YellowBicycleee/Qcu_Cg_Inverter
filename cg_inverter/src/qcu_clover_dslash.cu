@@ -898,7 +898,7 @@ void CloverDslash::calculateDslash(int invert_flag) {
 //   dslash_solver.calculateDslash(invert_flag);
 // }
 
-void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity){//, int dagger_flag) {
   // cloverResult(void* p_fermion_out, void* p_clover_matrix, int Lx, int Ly, int Lz, int Lt, int parity);
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
@@ -912,7 +912,7 @@ void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuPara
 }
 
 
-void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity){//, int dagger_flag) {
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
   int Lz = param->lattice_size[2];
@@ -927,7 +927,7 @@ void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, Q
 }
 
 
-void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
+void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param){//, int dagger_flag) {
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
   int Lz = param->lattice_size[2];
@@ -937,7 +937,7 @@ void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuPa
   for (int parity = 0; parity < 2; parity++) {
     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
-    invertCloverDslashHalf (half_fermion_out, half_fermion_in, gauge, param, parity, dagger_flag);
+    invertCloverDslashHalf (half_fermion_out, half_fermion_in, gauge, param, parity);//, dagger_flag);
   }
 }
 // void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {

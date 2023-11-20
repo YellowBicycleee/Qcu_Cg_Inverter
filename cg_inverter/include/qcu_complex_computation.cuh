@@ -17,6 +17,8 @@ void gpu_sclar_multiply_vector (void* x, void* scalar, int vol);
 
 void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result);
 
+// void gpu_vector_add (void* dst, void* vec_a, void* vec_b, int vector_length);
+// void gpu_vector_mul_scalar (void* dst, void* src, int vector_length);
 #ifdef USE_MPI
 
 #endif

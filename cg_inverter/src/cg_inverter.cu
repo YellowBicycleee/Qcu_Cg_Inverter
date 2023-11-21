@@ -10,7 +10,7 @@
 #include "qcu_macro.cuh"
 #include "qcu_clover_dslash.cuh"
 #include "qcu_communicator.cuh"
-// #define DEBUG
+#define DEBUG
 
 extern MPICommunicator *mpi_comm;
 
@@ -133,9 +133,9 @@ bool if_converge(void* r_vec, int vol) {
   mpi_comm->interprocess_inner_prod_barrier(r_vec, r_vec, d_inner_prod, vol);  // <r, r> --> d_numerator
   checkCudaErrors(cudaMemcpy(&inner_prod, d_inner_prod, sizeof(Complex), cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaFree(d_inner_prod));
-
-  // printf("difference = %.9lf\n", inner_prod.norm2());
-
+#ifdef DEBUG
+  printf("difference = %.33lf\n", inner_prod.norm2());
+#endif
   diff = inner_prod.norm2();
   if (diff < 1e-23) {
     res = true;

@@ -148,9 +148,9 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
   qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
 
-  printf("even difference :norm = %.33lf\n", h_norm2 / h_norm1);
+  printf("even difference :norm = %.64lf\n", h_norm2 / h_norm1);
 
-  return (h_norm2 / h_norm1 < 1e-15); // which means converge
+  return (h_norm2 / h_norm1 < 7e-16); // which means converge
 }
 
 // current_b is temporary
@@ -187,10 +187,10 @@ bool if_odd_converge(void* current_x, void* current_b_buffer, void* target_b, \
   qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
 // #ifdef DEBUG
-  printf("difference %.33lf\n", \
+  printf("difference %.64lf\n", \
               h_norm2 / h_norm1);
 // #endif
-  return (h_norm2 / h_norm1 < 1e-15); // which means converge
+  return (h_norm2 / h_norm1 < 7e-16); // which means converge
 }
 
 bool odd_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec, \

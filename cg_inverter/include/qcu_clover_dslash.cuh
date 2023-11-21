@@ -26,4 +26,4 @@ void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuPa
 void newFullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);
 
 void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity);//, int dagger_flag);
-void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity);//, int dagger_flag);
+void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity);

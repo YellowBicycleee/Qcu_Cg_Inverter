@@ -13,6 +13,9 @@ void gpu_saxpy(void* x, void* y, void* scalar, int vol);  // every point has Ns 
 // xy inner product --->result (by partial result), vol means Lx * Ly * Lz * Lt
 void gpu_inner_product (void* x, void* y, void* result, void* partial_result, int vol); // partial_result: reduction space
 
+void gpu_inner_product_new (void* x, void* y, void* result, void* partial_result, int vol); // partial_result: reduction space
+
+
 void gpu_sclar_multiply_vector (void* x, void* scalar, int vol);
 
 void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result);

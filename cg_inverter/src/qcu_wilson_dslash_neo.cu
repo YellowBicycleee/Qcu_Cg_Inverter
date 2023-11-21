@@ -782,7 +782,7 @@ void callWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam
 
   DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, gauge, param, parity);
   WilsonDslash dslash_solver(dslash_param);
-  dslash_solver.calculateDslash(0);
+  dslash_solver.calculateDslash(invert_flag);
 
   shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
 }
@@ -816,7 +816,7 @@ void callWilsonDslashFull(void *fermion_out, void *fermion_in, void *gauge, QcuP
 void callWilsonDslashNaive(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   WilsonDslash dslash_solver(dslash_param);
-  dslash_solver.calculateDslashNaive(0);
+  dslash_solver.calculateDslashNaive(invert_flag);
 }
 
 

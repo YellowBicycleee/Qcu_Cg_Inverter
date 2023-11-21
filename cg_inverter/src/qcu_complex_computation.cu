@@ -44,22 +44,30 @@ static __global__ void saxpy_gpu (void* y, void* x, void* a, int vol) {
 static __global__ void partial_product_kernel(void* x, void* y, void* partial_result, int vol) {
   int thread_in_total = blockIdx.x * blockDim.x + threadIdx.x;
   int thread_in_block = threadIdx.x;
+
   int stride, last_stride;
+  Complex* x_ptr = static_cast<Complex*>(x);
+  Complex* y_ptr = static_cast<Complex*>(y);
+
+// if(thread_in_total == 0) {
+//   printf("x_ptr = %p, y_ptr = %p\n", x_ptr, y_ptr);
+// }
+
   Complex temp;
   temp.clear2Zero();
   __shared__ Complex cache[BLOCK_SIZE];
 
   for (int i = thread_in_total; i < vol * Ns * Nc; i += vol) {
-    // temp += (*(static_cast<Complex*>(x) + i)) * (*(static_cast<Complex*>(y) + i));
-    temp += (*(static_cast<Complex*>(x) + i)).conj() * (*(static_cast<Complex*>(y) + i));
+    temp += x_ptr[i] * (y_ptr[i].conj());
+    // temp += x_ptr[i] * x_ptr[i].conj();
   }
   cache[thread_in_block] = temp;
   __syncthreads();
   // reduce in block
   last_stride = BLOCK_SIZE;
   stride = BLOCK_SIZE / 2;
-  while (stride > 0) {
-    if (thread_in_block < stride && thread_in_block + stride < last_stride) {
+  while (stride > 0 && thread_in_block < stride) {
+    if (thread_in_block + stride < last_stride) {
       cache[thread_in_block] += cache[thread_in_block + stride];
     }
     stride /= 2;
@@ -91,8 +99,9 @@ static __global__ void reduce_partial_result(void* partial_result, int partial_l
   // reduce in block
   last_stride = BLOCK_SIZE;
   stride = BLOCK_SIZE / 2;
-  while (stride > 0) {
-    if (thread_in_block < stride && thread_in_block + stride < last_stride) {
+  while (stride > 0 && thread_in_block < stride) {
+    // if (thread_in_block < stride && thread_in_block + stride < last_stride) {
+    if (thread_in_block + stride < last_stride) {
       cache[thread_in_block] += cache[thread_in_block + stride];
     }
     stride /= 2;
@@ -228,3 +237,57 @@ void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* res
 #endif
 }
 
+
+
+
+// FUNCTION: inner product
+static __global__ void partial_inner_prod_kernel(void* x, void* y, \
+    void* partial_result, int vector_length
+) {
+  int vol = gridDim.x * blockDim.x;
+  int thread_in_total = blockIdx.x * blockDim.x + threadIdx.x;
+  int thread_in_block = threadIdx.x;
+  int stride, last_stride;
+  int block_size = blockDim.x;
+  Complex temp;
+  Complex* x_ptr = static_cast<Complex*>(x);
+  Complex* y_ptr = static_cast<Complex*>(y);
+
+  if (thread_in_total >= vol) {
+    return;
+  }
+
+  temp.clear2Zero();
+  __shared__ Complex cache[BLOCK_SIZE];
+
+  for (int i = thread_in_total; i < vector_length; i += vol) {
+    temp += x_ptr[i] * y_ptr[i].conj();
+  }
+  cache[thread_in_block] = temp;
+  __syncthreads();
+  // reduce in block
+  last_stride = block_size;
+  stride = block_size / 2;
+  while (stride > 0 && thread_in_block < stride) {
+    if (thread_in_block + stride < last_stride) {
+      cache[thread_in_block] += cache[thread_in_block + stride];
+    }
+    stride /= 2;
+    last_stride /= 2;
+    __syncthreads();
+  }
+  if (thread_in_block == 0) {
+    *(static_cast<Complex*>(partial_result) + blockIdx.x) = cache[0];
+  }
+}
+
+void gpu_inner_product_new (void* x, void* y, void* result, void* partial_result, int vector_length) {
+  int grid_size = (vector_length + BLOCK_SIZE * Ns * Nc -1) / (BLOCK_SIZE * Ns * Nc);
+  int block_size = BLOCK_SIZE;
+
+  partial_inner_prod_kernel<<<grid_size, block_size>>>(x, y, partial_result, vector_length);
+  checkCudaErrors(cudaDeviceSynchronize());
+  reduce_partial_result<<<1, block_size>>>(partial_result, grid_size);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaMemcpy(result, partial_result, sizeof(Complex), cudaMemcpyDeviceToDevice));
+}

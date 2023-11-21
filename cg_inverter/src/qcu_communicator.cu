@@ -1619,8 +1619,45 @@ void MPICommunicator::interprocess_inner_prod_barrier(void* x, void* y, void* re
 
   checkCudaErrors(cudaMemcpy(&single_process_result, result, sizeof(Complex), cudaMemcpyDeviceToHost));
   MPI_Allreduce(&single_process_result, &all_reduce_result, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+  checkCudaErrors(cudaMemcpy(result, &all_reduce_result, sizeof(Complex), cudaMemcpyHostToDevice));
+
+
+  // Complex all_reduce_result;
+  // Complex single_process_result(0, 0);
+  // Complex* x_ptr = new Complex[vol * Ns * Nc];//static_cast<Complex*>(x);
+  // Complex* y_ptr = new Complex[vol * Ns * Nc];//static_cast<Complex*>(y);
+  // qcuCudaMemcpy(x_ptr, x, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost);
+  // qcuCudaMemcpy(y_ptr, y, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost);
+
+  // for (int i = 0; i < vol * Ns * Nc; i++) {
+  //   single_process_result += x_ptr[i] * y_ptr[i].conj();
+  // }
+  // MPI_Allreduce(&single_process_result, &all_reduce_result, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+  // checkCudaErrors(cudaMemcpy(result, &all_reduce_result, sizeof(Complex), cudaMemcpyHostToDevice));
+
+  
+  // delete x_ptr;
+  // delete y_ptr;
+}
+
+
+void MPICommunicator::interprocess_inner_prod(void* x, void* y, void* result, int vector_length) {
+  Complex all_reduce_result;
+  Complex single_process_result;
+  // void gpu_inner_product (void* x, void* y, void* result, void* partial_result, int vol) 
+  // gpu_inner_product(x, y, result, d_partial_result_buffer, vol);
+  gpu_inner_product_new (x, y, result, d_partial_result_buffer, vector_length);
+
+  checkCudaErrors(cudaMemcpy(&single_process_result, result, sizeof(Complex), cudaMemcpyDeviceToHost));
+  MPI_Allreduce(&single_process_result, &all_reduce_result, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
   checkCudaErrors(cudaMemcpy(result, &all_reduce_result, sizeof(Complex), cudaMemcpyHostToDevice));
 }
+
+
+
 
 void initMPICommunicator(void* gauge, void* fermion_in, void* fermion_out, int Lx, int Ly, int Lz, int Lt) {
   mpi_comm = new MPICommunicator(gauge, fermion_in, fermion_out, Lx, Ly, Lz, Lt);

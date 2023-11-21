@@ -204,14 +204,23 @@ bool cg(void* b_vec, void* r_vec, void* p_vec, void* x_vec, void* temp_vec1, voi
 
   mpi_comm->interprocess_inner_prod_barrier(r_vec, r_vec, d_numerator, vol);  // <r, r> --> d_numerator
 
+
   MmV_one_round (temp_vec1, p_vec, gauge, param, temporary_vector); // Ap--->temp_vec1
 
   mpi_comm->interprocess_inner_prod_barrier (p_vec, temp_vec1, d_denominator, vol);  // <p, Ap>
 
   checkCudaErrors(cudaMemcpy(&numerator, d_numerator, sizeof(Complex), cudaMemcpyDeviceToHost));
+
+  // printf("numerator.real = %lf, d_numerator.imag = %lf", numerator.real(), numerator.imag());
+
   checkCudaErrors(cudaMemcpy(&denominator, d_denominator, sizeof(Complex), cudaMemcpyDeviceToHost));
   alpha = numerator / denominator;
-
+// #ifdef DEBUG
+  // printf(RED"");
+  // printf("numerator %lf %lf\n", numerator.real(), numerator.imag());
+  // printf("denominator %lf %lf\n", denominator.real(), denominator.imag());
+  // printf(CLR"");
+// #endif
   checkCudaErrors(cudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice));
   mpi_comm->interprocess_saxpy_barrier(p_vec, x_vec, d_alpha, vol); // x = x + \alpha p
 

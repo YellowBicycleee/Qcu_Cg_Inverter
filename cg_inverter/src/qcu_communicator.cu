@@ -1612,34 +1612,34 @@ void MPICommunicator::interprocess_sax_barrier (void* x, void* scalar, int vol) 
 }
 
 void MPICommunicator::interprocess_inner_prod_barrier(void* x, void* y, void* result, int vol) {
-  Complex all_reduce_result;
-  Complex single_process_result;
-  // void gpu_inner_product (void* x, void* y, void* result, void* partial_result, int vol) 
-  gpu_inner_product(x, y, result, d_partial_result_buffer, vol);
-
-  checkCudaErrors(cudaMemcpy(&single_process_result, result, sizeof(Complex), cudaMemcpyDeviceToHost));
-  MPI_Allreduce(&single_process_result, &all_reduce_result, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-  checkCudaErrors(cudaMemcpy(result, &all_reduce_result, sizeof(Complex), cudaMemcpyHostToDevice));
-
-
   // Complex all_reduce_result;
-  // Complex single_process_result(0, 0);
-  // Complex* x_ptr = new Complex[vol * Ns * Nc];//static_cast<Complex*>(x);
-  // Complex* y_ptr = new Complex[vol * Ns * Nc];//static_cast<Complex*>(y);
-  // qcuCudaMemcpy(x_ptr, x, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost);
-  // qcuCudaMemcpy(y_ptr, y, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost);
+  // Complex single_process_result;
+  // // void gpu_inner_product (void* x, void* y, void* result, void* partial_result, int vol) 
+  // gpu_inner_product(x, y, result, d_partial_result_buffer, vol);
 
-  // for (int i = 0; i < vol * Ns * Nc; i++) {
-  //   single_process_result += x_ptr[i] * y_ptr[i].conj();
-  // }
+  // checkCudaErrors(cudaMemcpy(&single_process_result, result, sizeof(Complex), cudaMemcpyDeviceToHost));
   // MPI_Allreduce(&single_process_result, &all_reduce_result, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
   // checkCudaErrors(cudaMemcpy(result, &all_reduce_result, sizeof(Complex), cudaMemcpyHostToDevice));
 
+
+  Complex all_reduce_result;
+  Complex single_process_result(0, 0);
+  Complex* x_ptr = new Complex[vol * Ns * Nc];//static_cast<Complex*>(x);
+  Complex* y_ptr = new Complex[vol * Ns * Nc];//static_cast<Complex*>(y);
+  qcuCudaMemcpy(x_ptr, x, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost);
+  qcuCudaMemcpy(y_ptr, y, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost);
+
+  for (int i = 0; i < vol * Ns * Nc; i++) {
+    single_process_result += x_ptr[i] * y_ptr[i].conj();
+  }
+  MPI_Allreduce(&single_process_result, &all_reduce_result, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+  checkCudaErrors(cudaMemcpy(result, &all_reduce_result, sizeof(Complex), cudaMemcpyHostToDevice));
+
   
-  // delete x_ptr;
-  // delete y_ptr;
+  delete x_ptr;
+  delete y_ptr;
 }
 
 

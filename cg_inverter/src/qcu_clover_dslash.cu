@@ -987,6 +987,7 @@ void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam
 
 
 void fullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  double kappa = 0.125;
   // A = (1 + T)     A_{-1} Dslash
   cloverDslashOneRound(fermion_out, fermion_in, gauge, param, invert_flag);
 
@@ -997,7 +998,7 @@ void fullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge,
   int vol = Lx * Ly * Lz * Lt;
   int half_vol = vol / 2;
 
-  Complex h_kappa(1, 0);
+  Complex h_kappa(kappa, 0);
   Complex h_coeff(1, 0);
   Complex* d_coeff;
   Complex* d_kappa;
@@ -1052,6 +1053,7 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
 
 
 void newFullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  double kappa = 0.125;
   // A = (1 + T)     A_{-1} Dslash
   cloverDslashOneRound(fermion_out, fermion_in, gauge, param, invert_flag);
 
@@ -1062,7 +1064,7 @@ void newFullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gau
   int vol = Lx * Ly * Lz * Lt;
   // int half_vol = vol / 2;
 
-  Complex h_kappa(1, 0);
+  Complex h_kappa(kappa, 0);
   Complex h_coeff(1, 0);
   Complex* d_coeff;
   Complex* d_kappa;

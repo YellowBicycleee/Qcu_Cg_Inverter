@@ -4,9 +4,13 @@
 #include "qcu_communicator.cuh"
 #include "qcu.h"
 #include <chrono>
+#include "qcu_shift_storage_complex.cuh"
+#include "qcu_wilson_dslash_neo.cuh"
 // #define DEBUG
 
 extern MPICommunicator *mpi_comm;
+
+
 
 static __device__ inline void reconstructSU3(Complex *su3)
 {
@@ -566,6 +570,18 @@ static bool clover_prepared;
 static bool clover_allocated;
 static void* clover_matrix;
 static void* invert_matrix;
+static void* clover_matrix_coalesced;
+static void* invert_matrix_coalesced;
+
+extern void* qcu_gauge;
+
+__attribute__((constructor)) void initialize() {
+  // mpi_comm = nullptr;
+  clover_prepared = false;
+  new_clover_computation = 0;
+  clover_allocated = false;
+}
+
 
 static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, void* flag_ptr) {
   assert(parity == 0 || parity == 1);
@@ -787,7 +803,10 @@ CloverDslash::CloverDslash(DslashParam& param) : Dslash(param){
   int parity = 0;
   if (!clover_allocated) {
     checkCudaErrors(cudaMalloc(&clover_matrix, sizeof(Complex) * Ns * Nc * Ns * Nc / 2 * Lx * Ly * Lz * Lt));
+    checkCudaErrors(cudaMalloc(&clover_matrix_coalesced, sizeof(Complex) * Ns * Nc * Ns * Nc / 2 * Lx * Ly * Lz * Lt));
     checkCudaErrors(cudaMalloc(&invert_matrix, sizeof(Complex) * Ns * Nc * Ns * Nc / 2 * Lx * Ly * Lz * Lt));
+    checkCudaErrors(cudaMalloc(&invert_matrix_coalesced, sizeof(Complex) * Ns * Nc * Ns * Nc / 2 * Lx * Ly * Lz * Lt));
+    printf("memory allocated\n");
     clover_allocated = true;
   }
 
@@ -795,27 +814,33 @@ CloverDslash::CloverDslash(DslashParam& param) : Dslash(param){
     mpi_comm->allocateGaugeBuffer();
     mpi_comm->prepareGauge();
 
-    void* origin_gauge = dslashParam_->gauge;
+    void* origin_gauge = mpi_comm->getOriginGauge();;//dslashParam_->gauge;
     Complex** shift_gauge = mpi_comm->getShiftGauge();
     Complex** shift_shift_gauge = mpi_comm->getShiftShiftGauge();
     Complex** d_shift_gauge;
     Complex** d_shift_shift_gauge;
     checkCudaErrors(cudaMalloc(&d_shift_gauge, sizeof(Complex) * Nd * 2));
     checkCudaErrors(cudaMalloc(&d_shift_shift_gauge, sizeof(Complex) * 6 * 4));
-    checkCudaErrors(cudaMemcpy(d_shift_gauge, shift_gauge, sizeof(Complex) * Nd * 2, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_shift_gauge, shift_gauge, sizeof(Complex*) * Nd * 2, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_shift_shift_gauge, shift_shift_gauge, sizeof(Complex) * 6 * 4, cudaMemcpyHostToDevice));
     parity = 0;
 
     void *args[] = {&clover_matrix, &invert_matrix, &Lx, &Ly, &Lz, &Lt, &parity, &origin_gauge, &d_shift_gauge, &d_shift_shift_gauge};
+    // __global__ void gpuClover(void* clover_ptr, void* invert_ptr, int Lx, int Ly, int Lz, int Lt, int parity, Complex* origin_gauge, Complex** shift_gauge, Complex** shift_shift_gauge)
     checkCudaErrors(cudaLaunchKernel((void *)gpuClover, gridDim, blockDim, args));
     checkCudaErrors(cudaDeviceSynchronize());
 
     parity = 1;
     checkCudaErrors(cudaLaunchKernel((void *)gpuClover, gridDim, blockDim, args));
     checkCudaErrors(cudaDeviceSynchronize());
-    
+
     checkCudaErrors(cudaFree(d_shift_gauge));
     checkCudaErrors(cudaFree(d_shift_shift_gauge));
+
+
+    // shift storage
+    shiftCloverStorage(clover_matrix_coalesced, clover_matrix, Lx, Ly, Lz, Lt);
+    shiftCloverStorage(invert_matrix_coalesced, invert_matrix, Lx, Ly, Lz, Lt);
     if (new_clover_computation) {
       clover_prepared = false;
     } else {
@@ -844,6 +869,10 @@ void CloverDslash::cloverResult(void* p_fermion_out, void* p_clover_matrix, int 
   checkCudaErrors(cudaLaunchKernel((void *)gpuCloverCalculate, gridDim, blockDim, args));
   checkCudaErrors(cudaDeviceSynchronize());
 }
+
+
+
+
 
 void CloverDslash::calculateDslash(int invert_flag) {
   int Lx = dslashParam_->Lx;
@@ -890,14 +919,6 @@ void CloverDslash::calculateDslash(int invert_flag) {
 
 
 
-
-
-// void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
-//   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
-//   CloverDslash dslash_solver(dslash_param);
-//   dslash_solver.calculateDslash(invert_flag);
-// }
-
 void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity){//, int dagger_flag) {
   // cloverResult(void* p_fermion_out, void* p_clover_matrix, int Lx, int Ly, int Lz, int Lt, int parity);
   int Lx = param->lattice_size[0];
@@ -940,49 +961,13 @@ void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuPa
     invertCloverDslashHalf (half_fermion_out, half_fermion_in, gauge, param, parity);//, dagger_flag);
   }
 }
-// void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
-//   int Lx = param->lattice_size[0];
-//   int Ly = param->lattice_size[1];
-//   int Lz = param->lattice_size[2];
-//   int Lt = param->lattice_size[3];
-//   int vol = Lx * Ly * Lz * Lt;
-//   int half_vol = vol / 2;
-//   for (int parity = 0; parity < 2; parity++) {
-//     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
-//     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
 
-//     DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
-//     CloverDslash dslash_solver(dslash_param);
-//     //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
 
-//     dslash_solver.inverseCloverResult(half_fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity); // Clover
-//   }
-// }
-void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   CloverDslash dslash_solver(dslash_param);
-  dslash_solver.calculateDslash(invert_flag);
+  dslash_solver.calculateDslash(dagger_flag);
 }
-
-
-// void preCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
-//   int Lx = param->lattice_size[0];
-//   int Ly = param->lattice_size[1];
-//   int Lz = param->lattice_size[2];
-//   int Lt = param->lattice_size[3];
-//   int vol = Lx * Ly * Lz * Lt;
-//   int half_vol = vol / 2;
-//   for (int parity = 0; parity < 2; parity++) {
-//     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
-//     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
-
-//     DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
-//     CloverDslash dslash_solver(dslash_param);
-//     //   inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
-
-//     dslash_solver.inverseCloverResult(half_fermion_out, clover_matrix, Lx, Ly, Lz, Lt, parity); // Clover
-//   }
-// }
 
 
 
@@ -1025,7 +1010,6 @@ void fullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge,
 
   checkCudaErrors(cudaFree(d_coeff));
   checkCudaErrors(cudaFree(d_kappa));
-
 }
 
 // this fermion in is the start addr of all
@@ -1045,9 +1029,6 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
     callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
   }
-
-  // checkCudaErrors(cudaFree(d_coeff));
-  // checkCudaErrors(cudaFree(d_kappa));
 }
 
 
@@ -1092,10 +1073,148 @@ void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *
 }
 
 
-__attribute__((constructor)) void initialize() {
-  // mpi_comm = nullptr;
-  clover_prepared = false;
-  new_clover_computation = 0;
-  clover_allocated = false;
+void shiftCloverStorage(void* dst_vec, void* src_vec, int Lx, int Ly, int Lz, int Lt) {
+  // void shiftCloverStorageTwoDouble(void* dst_vec, void* src_vec, int shift_direction, int Lx, int Ly, int Lz, int Lt);
+  int half_vol = Lx * Ly * Lz * Lt / 2;
+  int clover_length = Ns * Nc * Ns * Nc / 2;
+  void* half_src;
+  void* half_dst;
+
+  for (int parity = 0; parity < 2; parity++) {
+    half_src = static_cast<void*>(static_cast<Complex*>(src_vec) \
+                + parity * half_vol * clover_length);
+    half_dst = static_cast<void*>(static_cast<Complex*>(dst_vec) \
+                + parity * half_vol * clover_length);
+    shiftCloverStorageTwoDouble(half_dst, half_src, TO_COALESCE, Lx, Ly, Lz, Lt);
+  }
 }
 
+
+
+static __global__ void gpuCloverCalculateCoalesced(void *fermion_out, \
+            void* clover_addr, int Lx, int Ly, int Lz, int Lt, int parity\
+) {
+  assert(parity == 0 || parity == 1);
+
+  int thread = blockIdx.x * blockDim.x + threadIdx.x;
+  int half_vol = Lx * Ly * Lz * Lt / 2;
+  const int vector_length = Ns * Nc;
+  const int clover_length = Ns * Ns * Nc * Nc / 2;
+
+  Complex *src_ptr;
+  Complex *dst_ptr;
+  Complex *clover_ptr;
+
+  Complex src_local[Ns * Nc]; // for GPU
+  Complex dst_local[Ns * Nc]; // for GPU
+  Complex clover_local[Ns * Nc * Ns * Nc / 2];
+
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_local[i].clear2Zero();
+  }
+
+  // load vector
+  src_ptr = static_cast<Complex*> (fermion_out) + thread;
+  for (int i = 0; i < vector_length; i++) {
+    src_local[i] = *src_ptr;
+    src_ptr += half_vol;
+  }
+
+  // load matrix
+  clover_ptr = static_cast<Complex*> (clover_addr) \
+                + parity * half_vol * clover_length + thread;
+  for (int i = 0; i < clover_length; i++) {
+    clover_local[i] = *clover_ptr;
+    clover_ptr += half_vol;
+  }
+
+  // A^{-1} dst
+  for (int i = 0; i < Ns * Nc / 2; i++) {
+    for (int j = 0; j < Ns * Nc / 2; j++) {
+      dst_local[i] += clover_local[i*Ns*Nc/2+j] * src_local[j];
+    }
+  }
+  for (int i = 0; i < Ns * Nc / 2; i++) {
+    for (int j = 0; j < Ns * Nc / 2; j++) {
+      dst_local[Ns*Nc/2+i] += \
+            clover_local[Ns*Nc*Ns*Nc/4 + i*Ns*Nc/2+j] * src_local[Ns*Nc/2+j];
+    }
+  }
+
+  // store result
+  dst_ptr = static_cast<Complex*> (fermion_out) + thread;
+  for (int i = 0; i < vector_length; i++) {
+    *dst_ptr = dst_local[i];
+    dst_ptr += half_vol;
+  }
+}
+void CloverDslash::cloverResultCoalesced(void* p_fermion_out, void* p_clover_matrix, \
+                    int Lx, int Ly, int Lz, int Lt, int parity) {
+  int half_vol = Lx * Ly * Lz * Lt >> 1;
+  dim3 gridDim(half_vol / BLOCK_SIZE);
+  dim3 blockDim(BLOCK_SIZE);
+
+  void *args[] = {&p_fermion_out, &p_clover_matrix, &Lx, &Ly, &Lz, &Lt, &parity};
+  checkCudaErrors(cudaLaunchKernel((void *)gpuCloverCalculateCoalesced, gridDim, blockDim, args));
+  checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void cloverVectorHalfCoalesced (void *fermion_out, void *fermion_in, void *gauge, \
+                                QcuParam *param, int parity
+){
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  CloverDslash dslash_solver(dslash_param);
+
+  dslash_solver.cloverResultCoalesced(fermion_out, clover_matrix_coalesced, \
+                                      Lx, Ly, Lz, Lt, parity); // Clover
+}
+
+void invertCloverDslashHalfCoalesced (void *fermion_out, void *fermion_in, void *gauge, \
+                             QcuParam *param, int parity \
+) {
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  CloverDslash dslash_solver(dslash_param);
+
+  dslash_solver.cloverResultCoalesced(fermion_out, invert_matrix_coalesced, \
+                                      Lx, Ly, Lz, Lt, parity); // Clover
+}
+
+
+
+static void *coalesced_fermion_in;
+static void * coalesced_fermion_out;
+static bool memory_allocated = false;
+extern void *qcu_gauge;
+void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+  
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  int vol = Lx * Ly * Lz * Lt;
+
+  if (!memory_allocated) {
+    checkCudaErrors(cudaMalloc(&coalesced_fermion_in, sizeof(double) * vol / 2 * Ns * Nc * 2));
+    checkCudaErrors(cudaMalloc(&coalesced_fermion_out, sizeof(double) * vol / 2 * Ns * Nc * 2));
+    memory_allocated = true;
+  }
+
+  shiftVectorStorageTwoDouble(coalesced_fermion_in, fermion_in, TO_COALESCE, Lx, Ly, Lz, Lt);
+
+  DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, qcu_gauge, param, parity);
+  WilsonDslash dslash_solver(dslash_param);
+  dslash_solver.calculateDslash(invert_flag);
+
+  invertCloverDslashHalfCoalesced (coalesced_fermion_out, coalesced_fermion_in, gauge, param, parity);
+
+  shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
+}

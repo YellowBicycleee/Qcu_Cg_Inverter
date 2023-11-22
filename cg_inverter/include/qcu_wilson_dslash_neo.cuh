@@ -12,5 +12,6 @@ public:
 void callWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
 
 void callWilsonDslashNaive(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
+void callWilsonDslashCoalesce(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
 
 void callWilsonDslashFull(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);

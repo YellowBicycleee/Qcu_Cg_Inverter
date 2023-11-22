@@ -410,7 +410,7 @@ void WilsonDslash::calculateDslash(int invert_flag) {
 
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  printf("coalescing total time: (without malloc free memcpy) : %.9lf sec, block size %d\n", double(duration) / 1e9, BLOCK_SIZE);
+  // printf("coalescing total time: (without malloc free memcpy) : %.9lf sec, block size %d\n", double(duration) / 1e9, BLOCK_SIZE);
 
 }
 
@@ -787,6 +787,19 @@ void callWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam
   shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
 }
 
+
+void callWilsonDslashCoalesce(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+
+  // int Lx = param->lattice_size[0];
+  // int Ly = param->lattice_size[1];
+  // int Lz = param->lattice_size[2];
+  // int Lt = param->lattice_size[3];
+  // int vol = Lx * Ly * Lz * Lt;
+
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  WilsonDslash dslash_solver(dslash_param);
+  dslash_solver.calculateDslash(invert_flag);
+}
 
 
 void callWilsonDslashFull(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {

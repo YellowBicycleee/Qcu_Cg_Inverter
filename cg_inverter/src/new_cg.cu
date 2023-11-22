@@ -11,11 +11,13 @@
 #include "qcu_clover_dslash.cuh"
 #include "qcu_communicator.cuh"
 #include "qcu_wilson_dslash_neo.cuh"
-
-// #define DEBUG
-
+#include "qcu_shift_storage_complex.cuh"
+#define DEBUG
+#define COALESCED_CG
 
 extern MPICommunicator *mpi_comm;
+extern void* qcu_gauge;
+
 
 
 // function pointers
@@ -30,9 +32,15 @@ void (*cloverVectorHalfFuntion) (void *fermion_out, void *fermion_in, \
 
 
 __attribute__((constructor)) void init_function() {
+#ifdef COALESCED_CG
+  wilsonDslashFunction = callWilsonDslashCoalesce;
+  invertCloverDslashHalfFunction = invertCloverDslashHalfCoalesced;
+  cloverVectorHalfFuntion = cloverVectorHalfCoalesced;
+#else
   wilsonDslashFunction = callWilsonDslashNaive;
   invertCloverDslashHalfFunction = invertCloverDslashHalf;
   cloverVectorHalfFuntion = cloverVectorHalf;
+#endif
 }
 
 
@@ -169,7 +177,7 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
 #ifdef DEBUG
   printf("even difference :norm = %.64lf\n", h_norm2 / h_norm1);
 #endif
-  return (h_norm2 / h_norm1 < 7e-16); // which means converge
+  return (h_norm2 / h_norm1 < 7e-15); // which means converge
 }
 
 // current_b is temporary
@@ -208,7 +216,7 @@ bool if_odd_converge(void* current_x, void* current_b_buffer, void* target_b, \
 #ifdef DEBUG
   printf("difference %.64lf\n", h_norm2 / h_norm1);
 #endif
-  return (h_norm2 / h_norm1 < 7e-16); // which means converge
+  return (h_norm2 / h_norm1 < 7e-15); // which means converge
 }
 
 bool odd_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec, \
@@ -476,7 +484,7 @@ bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p
 
   for (int i = 0; i < half_vol; i++) {
 #ifdef DEBUG
-    printf(RED"iteration %d\n", i+1);
+    printf(RED"iteration %d", i+1);
     printf(CLR"");
 #endif
 
@@ -581,6 +589,134 @@ void generate_new_b_odd(void* new_b, void* origin_odd_b, void* origin_even_b, \
 
 
 
+// void cg_inverter_naive(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
+
+
+
+//   double kappa = 0.125;
+
+//   int Lx = param->lattice_size[0];
+//   int Ly = param->lattice_size[1];
+//   int Lz = param->lattice_size[2];
+//   int Lt = param->lattice_size[3];
+//   int vol = Lx * Ly * Lz * Lt;
+//   int half_vol = vol >> 1;
+
+//   bool if_end = false;
+//   // ptrs doesn't need new memory
+//   void* origin_even_b;
+//   void* origin_odd_b;
+//   void* even_x;
+//   void* odd_x;
+
+//   // ptrs need to allocate memory
+//   void* temp_vec1;
+//   void* temp_vec2;
+//   void* temp_vec3;
+//   void* temp_vec4;
+//   void* temp_vec5;
+
+//   void* p_vec;
+//   void* resid_vec;
+
+//   void* d_coeff;
+//   void* d_kappa;
+//   void* d_alpha;
+//   void* d_beta;
+//   void* d_denominator;
+//   void* d_numerator;
+//   void* d_norm1;
+//   void* d_norm2;
+//   void* new_b;
+
+//   int dagger_flag;
+
+//   origin_even_b = b_vector;
+//   origin_odd_b = static_cast<void*>(static_cast<Complex*>(b_vector) \
+//                   + half_vol * Ns * Nc);
+//   even_x = x_vector;
+//   odd_x = static_cast<void*>(static_cast<Complex*>(x_vector) + half_vol * Ns * Nc);
+
+//   // memory allocation
+//   qcuCudaMalloc(&temp_vec1, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&temp_vec2, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&temp_vec3, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&temp_vec4, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&temp_vec5, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&p_vec, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&resid_vec, sizeof(Complex) * half_vol * Ns * Nc);
+//   qcuCudaMalloc(&d_coeff, sizeof(Complex));
+//   qcuCudaMalloc(&d_kappa, sizeof(Complex));
+
+//   qcuCudaMalloc(&d_alpha, sizeof(Complex));
+//   qcuCudaMalloc(&d_beta, sizeof(Complex));
+//   qcuCudaMalloc(&d_denominator, sizeof(Complex));
+//   qcuCudaMalloc(&d_numerator, sizeof(Complex));
+//   qcuCudaMalloc(&d_norm1, sizeof(Complex));
+//   qcuCudaMalloc(&d_norm2, sizeof(Complex));
+
+//   qcuCudaMalloc(&new_b, sizeof(Complex) * half_vol * Ns * Nc);
+
+
+
+
+
+
+//   // odd new_b
+//   generate_new_b_odd(temp_vec3, origin_odd_b, origin_even_b, temp_vec1, \
+//                     temp_vec2, temp_vec4, gauge, d_kappa, d_coeff, param, kappa);
+
+//   // odd dagger D new_b
+//   dagger_flag = 1;
+//   odd_matrix_mul_vector (new_b, temp_vec3, temp_vec1, temp_vec2, \
+//                          gauge, d_kappa, param, dagger_flag, kappa);
+
+//   if_end = odd_cg_inverter (odd_x, new_b, resid_vec, p_vec, \
+//                             temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
+//                             gauge, param, kappa, d_kappa, d_alpha, d_beta, \
+//                             d_denominator, d_numerator, d_coeff, d_norm1, d_norm2
+//   );
+
+//   if (!if_end) {
+//     printf("odd cg failed, donnot do even cg anymore, then exit\n");
+//     goto cg_end;
+//   }
+
+
+//   // even b
+//   generate_new_b_even (new_b, origin_even_b, odd_x,
+//                             gauge, d_kappa, d_coeff, param, kappa);
+
+//   if_end = even_cg_inverter (even_x, new_b, resid_vec, p_vec, \
+//                             temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
+//                             gauge, param, kappa, d_kappa, d_alpha, d_beta, \
+//                             d_denominator, d_numerator, d_coeff, d_norm1, d_norm2
+//   );
+//   if (!if_end) {
+//     printf("even cg failed, then exit\n");
+//     goto cg_end;
+//   }
+// cg_end:
+//   qcuCudaFree(temp_vec1);
+//   qcuCudaFree(temp_vec2);
+//   qcuCudaFree(temp_vec3);
+//   qcuCudaFree(temp_vec4);
+//   qcuCudaFree(temp_vec5);
+//   qcuCudaFree(p_vec);
+//   qcuCudaFree(resid_vec);
+//   qcuCudaFree(d_coeff);
+//   qcuCudaFree(d_kappa);
+
+//   qcuCudaFree(d_alpha);
+//   qcuCudaFree(d_beta);
+//   qcuCudaFree(d_denominator);
+//   qcuCudaFree(d_numerator);
+//   qcuCudaFree(d_norm1);
+//   qcuCudaFree(d_norm2);
+
+//   qcuCudaFree(new_b);
+// }
+
 void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   double kappa = 0.125;
 
@@ -590,6 +726,28 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   int Lt = param->lattice_size[3];
   int vol = Lx * Ly * Lz * Lt;
   int half_vol = vol >> 1;
+
+
+
+#ifdef COALESCED_CG
+  gauge = qcu_gauge;
+  void *origin_x_vector = x_vector;
+  void *coalesced_b_vector;
+  void *coalesced_x_vector;
+
+  qcuCudaMalloc(&coalesced_b_vector, sizeof(Complex) * vol * Ns * Nc);
+  qcuCudaMalloc(&coalesced_x_vector, sizeof(Complex) * vol * Ns * Nc);
+  void* origin_vector_eo = b_vector;
+  void* coalesced_vector_eo = coalesced_b_vector;
+  shiftVectorStorageTwoDouble(coalesced_vector_eo, origin_vector_eo, TO_COALESCE, Lx, Ly, Lz, Lt);
+  origin_vector_eo = static_cast<void*>(static_cast<Complex*>(b_vector) + half_vol * Ns * Nc);
+  coalesced_vector_eo = static_cast<void*>(static_cast<Complex*>(coalesced_b_vector) + half_vol * Ns * Nc);;
+  shiftVectorStorageTwoDouble(coalesced_vector_eo, origin_vector_eo, TO_COALESCE, Lx, Ly, Lz, Lt);
+
+  x_vector = coalesced_x_vector;
+  b_vector = coalesced_b_vector;
+#endif
+
 
   bool if_end = false;
   // ptrs doesn't need new memory
@@ -646,6 +804,11 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
 
   qcuCudaMalloc(&new_b, sizeof(Complex) * half_vol * Ns * Nc);
 
+
+
+
+
+
   // odd new_b
   generate_new_b_odd(temp_vec3, origin_odd_b, origin_even_b, temp_vec1, \
                     temp_vec2, temp_vec4, gauge, d_kappa, d_coeff, param, kappa);
@@ -658,8 +821,7 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   if_end = odd_cg_inverter (odd_x, new_b, resid_vec, p_vec, \
                             temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
                             gauge, param, kappa, d_kappa, d_alpha, d_beta, \
-                            d_denominator, d_numerator, d_coeff, d_norm1, d_norm2
-  );
+                            d_denominator, d_numerator, d_coeff, d_norm1, d_norm2);
 
   if (!if_end) {
     printf("odd cg failed, donnot do even cg anymore, then exit\n");
@@ -699,4 +861,19 @@ cg_end:
   qcuCudaFree(d_norm2);
 
   qcuCudaFree(new_b);
+
+#ifdef COALESCED_CG
+  x_vector = origin_x_vector;
+
+  origin_vector_eo = x_vector;
+  coalesced_vector_eo = coalesced_x_vector;
+  shiftVectorStorageTwoDouble(origin_vector_eo, coalesced_vector_eo, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
+  origin_vector_eo = static_cast<void*>(static_cast<Complex*>(x_vector) + half_vol * Ns * Nc);
+  coalesced_vector_eo = static_cast<void*>(static_cast<Complex*>(coalesced_x_vector) + half_vol * Ns * Nc);
+  shiftVectorStorageTwoDouble(origin_vector_eo, coalesced_vector_eo, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
+  //   shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
+  qcuCudaFree(coalesced_b_vector);
+  qcuCudaFree(coalesced_x_vector);
+#endif
 }
+

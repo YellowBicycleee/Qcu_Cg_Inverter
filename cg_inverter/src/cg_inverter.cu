@@ -372,9 +372,5 @@ cg_inverter_free:
   checkCudaErrors(cudaFree(partial_result_vector));
   checkCudaErrors(cudaFree(d_coeff));
   checkCudaErrors(cudaFree(temporary_vector));
-// #ifdef DEBUG
-//   checkCudaErrors(cudaFree(debug_ptr));
-//   checkCudaErrors(cudaFree(debug_b_ptr));
-// #endif
 }
 

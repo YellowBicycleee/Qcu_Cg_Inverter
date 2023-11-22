@@ -185,3 +185,50 @@ void shiftGaugeStorageTwoDouble(void* dst_vec, void* src_vec, int shift_directio
     checkCudaErrors(cudaDeviceSynchronize());
   }
 }
+
+
+
+// TODO: optimize
+static __global__ void shift_clover_to_coalesced (void* dst_vec, void* src_vec, \
+                                                  int Lx, int Ly, int Lz, int Lt \
+){
+
+  int half_vol = Lx * Ly * Lz * Lt / 2;
+  int thread_id = blockDim.x * blockIdx.x + threadIdx.x;
+  const int clover_length = Ns * Nc * Ns * Nc / 2;
+
+  double* src_ptr;
+  double* dst_ptr;
+
+  double local_clover[clover_length * 2];
+  src_ptr = static_cast<double*>(src_vec) + clover_length * thread_id * 2;
+  // load
+  for (int i = 0; i < clover_length; i++) {
+    local_clover[2 * i] = src_ptr[2 * i];
+    local_clover[2 * i + 1] = src_ptr[2 * i + 1];
+  }
+  // store
+  dst_ptr = static_cast<double*>(dst_vec) + thread_id * 2;
+  for (int i = 0; i < clover_length; i++) {
+    dst_ptr[0] = local_clover[2 * i];
+    dst_ptr[1] = local_clover[2 * i + 1];
+    dst_ptr += 2 * half_vol;
+  }
+}
+
+
+// TODO: non coalesced
+void shiftCloverStorageTwoDouble(void* dst_vec, void* src_vec, int shift_direction,\
+                                 int Lx, int Ly, int Lz, int Lt \
+) {
+  int vol = Lx * Ly * Lz * Lt;
+  int half_vol = vol / 2;
+
+  int block_size = BLOCK_SIZE;
+  int grid_size = (half_vol + block_size - 1) / block_size;
+
+  if (shift_direction == TO_COALESCE) {
+    shift_clover_to_coalesced <<<grid_size, block_size>>>(dst_vec, src_vec, Lx, Ly, Lz, Lt);
+    checkCudaErrors(cudaDeviceSynchronize());
+  }
+}

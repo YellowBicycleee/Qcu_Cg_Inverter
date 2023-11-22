@@ -15,3 +15,5 @@ void shiftVectorStorageTwoDouble(void* dst_vec, void* src_vec, int shift_directi
 
 
 void shiftGaugeStorageTwoDouble(void* dst_vec, void* src_vec, int shift_direction, int Lx, int Ly, int Lz, int Lt);
+
+void shiftCloverStorageTwoDouble(void* dst_vec, void* src_vec, int shift_direction, int Lx, int Ly, int Lz, int Lt);

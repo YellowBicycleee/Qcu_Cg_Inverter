@@ -15,8 +15,8 @@ static __global__ void initialize(void* a, void* b) {
   Complex* dst_a = static_cast<Complex*>(a) + pos * Ns * Nc;
   Complex* dst_b = static_cast<Complex*>(b) + pos * Ns * Nc;
   for (int i = 0; i < Ns * Nc; i++) {
-    dst_a[i] = src[i];
-    dst_b[i] = src[i];
+    dst_a[i] = Complex(1000, 1000);
+    dst_b[i] = Complex(1000, 1000);
   }
 }
 
@@ -47,7 +47,7 @@ static void inner_product_cpu(void* h_a, void* h_b, void* h_res, int vol) {
   Complex* a_ptr = static_cast<Complex*>(h_a);
   Complex* b_ptr = static_cast<Complex*>(h_b);
   for (int i = 0; i < vol * Nd * Nc; i++) {
-    *result += a_ptr[i] * b_ptr[i];
+    *result += a_ptr[i] * b_ptr[i].conj();
   }
 }
 
@@ -86,13 +86,14 @@ static void test_inner_product() {
   checkCudaErrors(cudaMemcpy(h_a, d_a, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(h_b, d_b, sizeof(Complex) * vol * Ns * Nc, cudaMemcpyDeviceToHost));
   //void gpu_inner_product (void* x, void* y, void* result, int vol);
-  gpu_inner_product(d_a, d_b, static_cast<void*>(gpu_result), partial_result, vol);
-  inner_product_cpu(h_a, h_b, static_cast<void*>(&h_cpu_result), vol);
+  // gpu_inner_product(d_a, d_b, static_cast<void*>(gpu_result), partial_result, vol);
+  gpu_inner_product(d_a, d_a, static_cast<void*>(gpu_result), partial_result, vol);
+  inner_product_cpu(h_a, h_a, static_cast<void*>(&h_cpu_result), vol);
   checkCudaErrors(cudaMemcpy(&h_gpu_result, gpu_result, sizeof(Complex), cudaMemcpyDeviceToHost));
 
   double difference = (h_cpu_result - h_gpu_result).norm2();
 
-  printf("difference between cpu and gpu result %lf, cpu_res = %lf, gpu_res = %lf\n", difference, h_cpu_result.norm2(), h_gpu_result.norm2());
+  printf("difference between cpu and gpu result %lf, cpu_norm = %lf, gpu_norm = %lf\n, \n", difference, h_cpu_result.norm2(), h_gpu_result.norm2());
 
   // free
   free(h_a);
@@ -164,4 +165,10 @@ void test_computation() {
   test_saxpy();
   printf("Now: testing inner product...\n");
   test_inner_product();
+}
+
+
+int main () {
+  test_computation();
+  return 0;
 }

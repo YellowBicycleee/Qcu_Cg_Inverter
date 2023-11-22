@@ -10,7 +10,7 @@
 #include "qcu_macro.cuh"
 #include "qcu_clover_dslash.cuh"
 #include "qcu_communicator.cuh"
-#define DEBUG
+// #define DEBUG
 
 extern MPICommunicator *mpi_comm;
 

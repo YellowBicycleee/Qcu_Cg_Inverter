@@ -1,3 +1,15 @@
+/**
+ * @file qcu_wilson_dslash.cu
+ * @author Wang Jiancheng
+ * @brief version of multi-process wilson dslash
+ * @version 0.1
+ * @date 2023-11-22
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+
+
 #include "qcu_wilson_dslash.cuh"
 #include "qcu_complex.cuh"
 #include "qcu_point.cuh"
@@ -263,7 +275,7 @@ static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_ou
 }
 
 
-void MpiWilsonDslash::calculateDslash(int invert_flag) {
+void MpiWilsonDslash::calculateDslash(int dagger_flag) {
   int Lx = dslashParam_->Lx;
   int Ly = dslashParam_->Ly;
   int Lz = dslashParam_->Lz;
@@ -277,14 +289,14 @@ void MpiWilsonDslash::calculateDslash(int invert_flag) {
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
 
-  mpi_comm->preDslash(dslashParam_->fermion_in, parity, invert_flag);
+  mpi_comm->preDslash(dslashParam_->fermion_in, parity, dagger_flag);
 
   auto start = std::chrono::high_resolution_clock::now();
   void *args[] = {&dslashParam_->gauge, &dslashParam_->fermion_in, &dslashParam_->fermion_out, &Lx, &Ly, &Lz, &Lt, &parity, &grid_x, &grid_y, &grid_z, &grid_t};
   checkCudaErrors(cudaLaunchKernel((void *)mpiDslash, gridDim, blockDim, args));
   checkCudaErrors(cudaDeviceSynchronize());
   // boundary calculate
-  mpi_comm->postDslash(dslashParam_->fermion_out, parity, invert_flag);
+  mpi_comm->postDslash(dslashParam_->fermion_out, parity, dagger_flag);
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
@@ -292,10 +304,10 @@ void MpiWilsonDslash::calculateDslash(int invert_flag) {
 
 
 
-void callMpiWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+void callMpiWilsonDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   MpiWilsonDslash dslash_solver(dslash_param);
-  dslash_solver.calculateDslash(0);
+  dslash_solver.calculateDslash(dagger_flag);
 }
 
 
@@ -317,9 +329,9 @@ void wilsonDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
   }
 }
 
-void fullWilsonDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+void fullWilsonDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   // Dslash
-  wilsonDslashOneRound(fermion_out, fermion_in, gauge, param, invert_flag);
+  wilsonDslashOneRound(fermion_out, fermion_in, gauge, param, dagger_flag);
 
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];

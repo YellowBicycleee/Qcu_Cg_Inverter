@@ -17,6 +17,25 @@
 
 extern MPICommunicator *mpi_comm;
 
+
+// function pointers
+void (*wilsonDslashFunction) (void *fermion_out, void *fermion_in, void *gauge, \
+                              QcuParam *param, int parity, int dagger_flag);
+
+void (*invertCloverDslashHalfFunction) (void *fermion_out, void *fermion_in, \
+                              void *gauge, QcuParam *param, int parity);
+void (*cloverVectorHalfFuntion) (void *fermion_out, void *fermion_in, \
+                              void *gauge, QcuParam *param, int parity);
+
+
+
+__attribute__((constructor)) void init_function() {
+  wilsonDslashFunction = callWilsonDslashNaive;
+  invertCloverDslashHalfFunction = invertCloverDslashHalf;
+  cloverVectorHalfFuntion = cloverVectorHalf;
+}
+
+
 /**
  * @brief clear the Complex vector named vec of vector_length elements to zero (kernel function)
  * 
@@ -83,16 +102,16 @@ void odd_matrix_mul_vector (void* output_Ax, void* input_x, void* temp_vec1, voi
 
   // part1 begin
   parity = 1;
-  cloverVectorHalf (output_Ax, nullptr, gauge, param, parity);
+  cloverVectorHalfFuntion (output_Ax, nullptr, gauge, param, parity);
   // part1 end
 
   // part2 begin
   parity = 0;
-  callWilsonDslashNaive(temp_vec1, input_x, gauge, param, parity, dagger_flag);
+  wilsonDslashFunction(temp_vec1, input_x, gauge, param, parity, dagger_flag);
   parity = 0;
-  invertCloverDslashHalf (temp_vec1, nullptr, gauge, param, parity);  // clover invert
+  invertCloverDslashHalfFunction (temp_vec1, nullptr, gauge, param, parity);  // clover invert
   parity = 1;
-  callWilsonDslashNaive(temp_vec2, temp_vec1, gauge, param, parity, dagger_flag);
+  wilsonDslashFunction(temp_vec2, temp_vec1, gauge, param, parity, dagger_flag);
   // part2 end
 
   h_coeff = Complex(-kappa * kappa, 0);
@@ -115,7 +134,7 @@ void full_odd_matrix_mul_vector (void* output_Ax, void* input_x, void* temp_vec1
 bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
                     void* temp_vec1, void* temp_vec2, void* temp_vec3, \
                     void* gauge, void* d_kappa, void* d_coeff, \
-                    void* d_norm1, void* d_norm2, QcuParam *param, double kappa
+                    void* d_norm1, void* d_norm2, QcuParam *param, double kappa \
 ) {
 
   int Lx = param->lattice_size[0];
@@ -133,7 +152,7 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
 
   qcuCudaMemcpy(current_b_buffer, current_x, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);
-  cloverVectorHalf (current_b_buffer, nullptr, gauge, param, parity);  // Ax ---> current_b_buffer
+  cloverVectorHalfFuntion (current_b_buffer, nullptr, gauge, param, parity);  // Ax ---> current_b_buffer
 
   gpu_vector_norm2 (target_b, temp_vec3, half_vol, d_norm1);
 
@@ -147,9 +166,9 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
   gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
   qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
-
+#ifdef DEBUG
   printf("even difference :norm = %.64lf\n", h_norm2 / h_norm1);
-
+#endif
   return (h_norm2 / h_norm1 < 7e-16); // which means converge
 }
 
@@ -186,10 +205,9 @@ bool if_odd_converge(void* current_x, void* current_b_buffer, void* target_b, \
   gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
   qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
-// #ifdef DEBUG
-  printf("difference %.64lf\n", \
-              h_norm2 / h_norm1);
-// #endif
+#ifdef DEBUG
+  printf("difference %.64lf\n", h_norm2 / h_norm1);
+#endif
   return (h_norm2 / h_norm1 < 7e-16); // which means converge
 }
 
@@ -280,7 +298,7 @@ bool even_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec
         void* temp_vec1, void* temp_vec2, void* temp_vec3, void* temp_vec4, void* temp_vec5, \
         void* gauge, QcuParam *param, double kappa, void* d_kappa, \
         void* d_alpha, void* d_beta, void* d_denominator, void* d_numerator, \
-        void* d_coeff, void* d_norm1, void* d_norm2
+        void* d_coeff, void* d_norm1, void* d_norm2 \
 ) {
 
   int Lx = param->lattice_size[0];
@@ -302,7 +320,7 @@ bool even_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec
 
   qcuCudaMemcpy(temp_vec4, p_vec, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);
-  cloverVectorHalf (temp_vec4, nullptr, gauge, param, 0);  // Ap --->temp_vec4
+  cloverVectorHalfFuntion (temp_vec4, nullptr, gauge, param, 0);  // Ap --->temp_vec4
 
 
   mpi_comm->interprocess_inner_prod_barrier(p_vec, temp_vec4, d_denominator, \
@@ -377,7 +395,7 @@ bool even_cg_inverter (void* iter_x_even, void* target_b, void* resid_vec, void*
   parity = 0;
   qcuCudaMemcpy (temp_vec1, iter_x_even, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);  // x-->temp_vec1
-  cloverVectorHalf (temp_vec1, nullptr, gauge, param, parity);  // Ax ---> temp_vec1
+  cloverVectorHalfFuntion (temp_vec1, nullptr, gauge, param, parity);  // Ax ---> temp_vec1
 
   h_coeff = Complex(-1, 0);
   qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
@@ -507,7 +525,7 @@ void generate_new_b_even (void* new_even_b, void* origin_even_b, void* res_odd_x
   qcuCudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice);
 
   // D_{eo}x_{o} ----> new_even_b
-  callWilsonDslashNaive (new_even_b, res_odd_x, gauge, param, parity, dagger_flag);
+  wilsonDslashFunction (new_even_b, res_odd_x, gauge, param, parity, dagger_flag);
   // kappa D_{eo}x_{o} ----> new_even_b
   mpi_comm->interprocess_sax_barrier (new_even_b, d_kappa, half_vol);
 
@@ -541,11 +559,11 @@ void generate_new_b_odd(void* new_b, void* origin_odd_b, void* origin_even_b, \
   qcuCudaMemcpy(temp_vec1, origin_even_b, sizeof(Complex) * half_vol * Ns * Nc, cudaMemcpyDeviceToDevice);
 
   parity = 0;
-  invertCloverDslashHalf (temp_vec1, nullptr, gauge, param, parity); // A^{-1}_{ee}b_{e} ---> temp_vec1
+  invertCloverDslashHalfFunction (temp_vec1, nullptr, gauge, param, parity); // A^{-1}_{ee}b_{e} ---> temp_vec1
 
   parity = 1;
   dagger_flag = 0;
-  callWilsonDslashNaive (new_b, temp_vec1, gauge, param, parity, dagger_flag); //  D_{oe}A^{-1}_{ee}b_{e} ----> new_b
+  wilsonDslashFunction (new_b, temp_vec1, gauge, param, parity, dagger_flag); //  D_{oe}A^{-1}_{ee}b_{e} ----> new_b
 
   // kappa D_{oe}A^{-1}_{ee}b_{e}
   h_kappa = Complex(kappa, 0);

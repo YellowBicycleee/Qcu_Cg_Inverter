@@ -22,24 +22,24 @@ extern void* qcu_gauge;
 
 
 // WARP version, no sync
-static __device__ __forceinline__ void storeVectorBySharedMemory(void* shared_ptr, Complex* origin, Complex* result) {
-  // result is register variable
-  double* shared_buffer = static_cast<double*>(shared_ptr);
-  int thread = blockDim.x * blockIdx.x + threadIdx.x;
-  int warp_index = (thread - thread / BLOCK_SIZE * BLOCK_SIZE) / WARP_SIZE;//thread % BLOCK_SIZE / WARP_SIZE;
-  Complex* shared_dst = reinterpret_cast<Complex*>(shared_buffer) + threadIdx.x * Ns * Nc;
-  Complex* warp_dst = origin + (thread / WARP_SIZE * WARP_SIZE) * Ns * Nc;
-  double* double_dst = reinterpret_cast<double*>(warp_dst);
+// static __device__ __forceinline__ void storeVectorBySharedMemory(void* shared_ptr, Complex* origin, Complex* result) {
+//   // result is register variable
+//   double* shared_buffer = static_cast<double*>(shared_ptr);
+//   int thread = blockDim.x * blockIdx.x + threadIdx.x;
+//   int warp_index = (thread - thread / BLOCK_SIZE * BLOCK_SIZE) / WARP_SIZE;//thread % BLOCK_SIZE / WARP_SIZE;
+//   Complex* shared_dst = reinterpret_cast<Complex*>(shared_buffer) + threadIdx.x * Ns * Nc;
+//   Complex* warp_dst = origin + (thread / WARP_SIZE * WARP_SIZE) * Ns * Nc;
+//   double* double_dst = reinterpret_cast<double*>(warp_dst);
 
-  // store result to shared memory
-  for (int i = 0; i < Ns * Nc; i++) {
-    shared_dst[i] = result[i];
-  }
-  // store result of shared memory to global memory
-  for (int i = threadIdx.x - threadIdx.x / WARP_SIZE * WARP_SIZE; i < WARP_SIZE * Ns * Nc * 2; i += WARP_SIZE) {
-    double_dst[i] = shared_buffer[warp_index * WARP_SIZE * Ns * Nc * 2 + i];
-  }
-}
+//   // store result to shared memory
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     shared_dst[i] = result[i];
+//   }
+//   // store result of shared memory to global memory
+//   for (int i = threadIdx.x - threadIdx.x / WARP_SIZE * WARP_SIZE; i < WARP_SIZE * Ns * Nc * 2; i += WARP_SIZE) {
+//     double_dst[i] = shared_buffer[warp_index * WARP_SIZE * Ns * Nc * 2 + i];
+//   }
+// }
 
 
 

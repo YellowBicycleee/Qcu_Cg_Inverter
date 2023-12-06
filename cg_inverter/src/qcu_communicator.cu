@@ -10,6 +10,7 @@ int grid_x;
 int grid_y;
 int grid_z;
 int grid_t;
+int proc_grid_size[Nd];
 
 static int process_rank;
 static int process_num;
@@ -1030,6 +1031,8 @@ struct Coord {  // use this to store the coord of this process, and calculate ad
 static Coord coord;
 MPICommunicator *mpi_comm;
 
+
+
 void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
   for (int i = 0; i < Nd; i++) {
     // calc Boundary and send Boundary
@@ -1181,6 +1184,9 @@ void MPICommunicator::recvBoundaryVector(int direction) {
 
 void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction, int parity, int invert_flag) { // add parameter  invert_flag,  0---->flag(1,0)  1--->flag(-1, 0)
   assert (invert_flag == 0 || invert_flag == 1);
+  // cudaStream_t stream;
+  // checkCudaErrors(cudaStreamCreate(&stream));
+
   Complex h_flag;
   Complex* d_flag_ptr;
   checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
@@ -1676,6 +1682,13 @@ void initGridSize(QcuGrid_t* grid, QcuParam* p_param, void* gauge, void* fermion
   grid_z = grid->grid_size[2];
   grid_t = grid->grid_size[3];
 
+  // NEW: 
+  #pragma unroll
+  for (int i = 0; i < Nd; i++) {
+    grid->grid_size[i] = proc_grid_size[i];
+  }
+
+
   MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &process_num);
   coord.t = process_rank % grid_t;
@@ -1695,3 +1708,44 @@ __attribute__((constructor)) void initialize_mpi() {
 __attribute__((destructor)) void destroySpace_mpi() {
   delete mpi_comm;
 }
+
+
+
+
+// // NEW
+// void MPICommunicator::preBoundaryCalc(int direction, int dagger_flag) {
+
+// }
+
+// // TODO : wjc
+// // TODO : wjc
+// void MPICommunicator::preDslashNew(void* gauge, void* fermion_in, \
+//         int parity, int dagger_flag
+// ) {
+//   int boundary_size;
+//   for (int i = 0; i < Nd; i++) {
+//     if (proc_grid_size[i] > 1) {
+//       // create cudaStream
+//       cudaStreamCreate(cuda_streams_[i]);
+//       // calculate boundary vector
+//       boundary_size = 1;
+//       for (int j = 0; j < Nd; j++) {
+
+//       }
+//       // send boundary vector
+//     }
+//   }
+// }
+
+
+// void MPICommunicator::sendVector(void* fermion_in, int parity, int dagger_flag) {
+//   // dagger flage
+//   assert (dagger_flag == 0 || dagger_flag == 1);
+//   cudaStream_t stream;
+//   checkCudaErrors(cudaStreamCreate(&stream));
+
+
+//   for (int direction = 0; direction < Nd; i++) {
+
+//   }
+// }

@@ -4,7 +4,7 @@ set(CMAKE_CUDA_ARCHITECTURES 70)
 set(CMAKE_BUILD_TYPE Release)
 project(QCU LANGUAGES C CXX CUDA)
 
-include_directories(include)
+include_directories(/Users/cheng/myfile/git_file/qcu/Qcu_Cg_Inverter/cg_inverter/include)
 #add_library(qcu SHARED src/dslash.cu)
 #add_library(qcu SHARED src/dslash.cu  src/cg_inverter.cu src/qcu_complex_computation.cu )
 #add_library(qcu SHARED  src/cg_inverter.cu src/dslash.cu src/qcu_clover_dslash.cu src/qcu_communicator.cu src/qcu_complex_computation.cu src/qcu_shift_storage_complex.cu src/qcu_wilson_dslash.cu src/qcu_wilson_dslash_neo.cu src/qcu_wilson_dslash_new_new.cu )

@@ -37,6 +37,8 @@ private:
   Complex* h_recv_gauge[Nd][2];   // Nd - 4 dims    2: Front/back
   Complex* d_recv_gauge[Nd][2];   // Nd - 4 dims    2: Front/back
 
+  cudaStream_t cuda_streams_[Nd]; // cudaStream_t
+
   MPI_Request send_front_req[Nd];
   MPI_Request send_back_req[Nd];
   MPI_Request recv_front_req[Nd];

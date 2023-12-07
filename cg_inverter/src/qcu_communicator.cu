@@ -1223,21 +1223,19 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &d_flag_ptr};
   if (direction == T_DIRECTION && grid_t > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontT, subGridDim, blockDim, args1));
-    checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
   } else if (direction == Z_DIRECTION && grid_z > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontZ, subGridDim, blockDim, args1));
-    checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
   } else if (direction == Y_DIRECTION && grid_y > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontY, subGridDim, blockDim, args1));
-    checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
   } else if (direction == X_DIRECTION && grid_x > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontX, subGridDim, blockDim, args1));
+  }
+
+  if ((direction == T_DIRECTION && grid_t > 1) || 
+      (direction == Z_DIRECTION && grid_z > 1) || 
+      (direction == Y_DIRECTION && grid_y > 1) ||
+      (direction == X_DIRECTION && grid_x > 1)
+  ) {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
     MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
@@ -1251,25 +1249,24 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   void *args2[] = {&fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr};
   if (direction == T_DIRECTION && grid_t > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackT, subGridDim, blockDim, args2));
-    checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
   } else if (direction == Z_DIRECTION && grid_z > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackZ, subGridDim, blockDim, args2));
-    checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
   } else if (direction == Y_DIRECTION && grid_y > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackY, subGridDim, blockDim, args2));
-    checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
   } else if (direction == X_DIRECTION && grid_x > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackX, subGridDim, blockDim, args2));
+  }
+
+  if ((direction == T_DIRECTION && grid_t > 1) || 
+      (direction == Z_DIRECTION && grid_z > 1) || 
+      (direction == Y_DIRECTION && grid_y > 1) ||
+      (direction == X_DIRECTION && grid_x > 1)
+  ) {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
     MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
   }
+
   checkCudaErrors(cudaFree(d_flag_ptr));
 }
 

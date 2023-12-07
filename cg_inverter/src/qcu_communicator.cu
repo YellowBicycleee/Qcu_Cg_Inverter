@@ -1162,9 +1162,6 @@ void MPICommunicator::recvBoundaryVector(int direction) {
   sub_vol >>= 1;  // div 2
   boundary_length = sub_vol * (Ns * Nc);
 
-  // from front
-  // h_addr = mpi_comm->getHostRecvBufferAddr(FRONT, direction);
-  // src_process = grid_front[direction];
   if ((direction == T_DIRECTION && grid_t > 1) || 
       (direction == Z_DIRECTION && grid_z > 1) || 
       (direction == Y_DIRECTION && grid_y > 1) || 
@@ -1180,15 +1177,6 @@ void MPICommunicator::recvBoundaryVector(int direction) {
     src_process = grid_back[direction];
     MPI_Irecv(h_addr, boundary_length * 2, MPI_DOUBLE, src_process, FRONT, MPI_COMM_WORLD, &recv_back_req[direction]);// src_process tag is FRONT, so use same tag, which is FRONT (though from FRONT, so sad)
   }
-  // from back
-  // h_addr = mpi_comm->getHostRecvBufferAddr(BACK, direction);
-  // src_process = grid_back[direction];
-  // if ((direction == T_DIRECTION && grid_t > 1) || 
-  //     (direction == Z_DIRECTION && grid_z > 1) || 
-  //     (direction == Y_DIRECTION && grid_y > 1) || 
-  //     (direction == X_DIRECTION && grid_x > 1) )    {
-  //   MPI_Irecv(h_addr, boundary_length * 2, MPI_DOUBLE, src_process, FRONT, MPI_COMM_WORLD, &recv_back_req[direction]);// src_process tag is FRONT, so use same tag, which is FRONT (though from FRONT, so sad)
-  // }
 }
 
 void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction, int parity, int invert_flag) { // add parameter  invert_flag,  0---->flag(1,0)  1--->flag(-1, 0)

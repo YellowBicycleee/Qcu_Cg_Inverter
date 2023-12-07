@@ -1038,9 +1038,14 @@ void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
     // calc Boundary and send Boundary
     prepareFrontBoundaryVector (fermion_in, i, parity, invert_flag);
   }
+  checkCudaErrors(cudaStreamSynchronize(NULL));
   for (int i = 0; i < Nd; i++) {
     // recv Boundary
     recvBoundaryVector(i);
+  }
+  for (int i = 0; i < Nd; i++) {
+    // recv Boundary
+    sendBoundaryVector(i);
   }
 }
 
@@ -1148,6 +1153,37 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int invert_flag)
   checkCudaErrors(cudaFree(d_flag_ptr));
 }
 
+
+void MPICommunicator::sendBoundaryVector(int direction) {
+  Complex* h_addr;
+  int dst_process;
+
+  int length[Nd] = {Lx_, Ly_, Lz_, Lt_};
+  length[direction] = 1;
+  int boundary_length = 1;
+  int sub_vol = 1;
+  for (int i = 0; i < Nd; i++) {
+    sub_vol *= length[i];
+  }
+  sub_vol >>= 1;  // div 2
+  boundary_length = sub_vol * (Ns * Nc);
+
+  if ((direction == T_DIRECTION && grid_t > 1) || 
+      (direction == Z_DIRECTION && grid_z > 1) || 
+      (direction == Y_DIRECTION && grid_y > 1) || 
+      (direction == X_DIRECTION && grid_x > 1) )
+  {
+    // to front
+    h_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
+    dst_process = grid_front[direction];
+    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]); // src_process tag is BACK, so use same tag, which is BACK(though from FRONT, so sad)
+
+    // to back
+    h_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
+    dst_process = grid_back[direction];
+    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &recv_back_req[direction]);// src_process tag is FRONT, so use same tag, which is FRONT (though from FRONT, so sad)
+  }
+}
 void MPICommunicator::recvBoundaryVector(int direction) {
   Complex* h_addr;
   int src_process;
@@ -1232,8 +1268,8 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
       (direction == X_DIRECTION && grid_x > 1)
   ) {
     checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
+    checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
+    // MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
   }
 
 
@@ -1258,8 +1294,8 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
       (direction == X_DIRECTION && grid_x > 1)
   ) {
     checkCudaErrors(cudaDeviceSynchronize());
-    checkCudaErrors(cudaMemcpy(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
+    checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
+    // MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
   }
 
   checkCudaErrors(cudaFree(d_flag_ptr));
@@ -1700,44 +1736,3 @@ __attribute__((constructor)) void initialize_mpi() {
 __attribute__((destructor)) void destroySpace_mpi() {
   delete mpi_comm;
 }
-
-
-
-
-// // NEW
-// void MPICommunicator::preBoundaryCalc(int direction, int dagger_flag) {
-
-// }
-
-// // TODO : wjc
-// // TODO : wjc
-// void MPICommunicator::preDslashNew(void* gauge, void* fermion_in, \
-//         int parity, int dagger_flag
-// ) {
-//   int boundary_size;
-//   for (int i = 0; i < Nd; i++) {
-//     if (proc_grid_size[i] > 1) {
-//       // create cudaStream
-//       cudaStreamCreate(cuda_streams_[i]);
-//       // calculate boundary vector
-//       boundary_size = 1;
-//       for (int j = 0; j < Nd; j++) {
-
-//       }
-//       // send boundary vector
-//     }
-//   }
-// }
-
-
-// void MPICommunicator::sendVector(void* fermion_in, int parity, int dagger_flag) {
-//   // dagger flage
-//   assert (dagger_flag == 0 || dagger_flag == 1);
-//   cudaStream_t stream;
-//   checkCudaErrors(cudaStreamCreate(&stream));
-
-
-//   for (int direction = 0; direction < Nd; i++) {
-
-//   }
-// }

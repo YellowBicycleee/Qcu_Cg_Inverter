@@ -4,6 +4,8 @@
 #include "qcu_macro.cuh"
 #include "assert.h"
 #include <mpi.h>
+
+
 class MPICommunicator {
 private:
   int Lx_;
@@ -73,12 +75,8 @@ public:
     }
     allocateBuffer();
     calculateAdjacentProcess();
-    // allocateGaugeBuffer();
-    // prepareGauge();
   }
   ~MPICommunicator() {
-    // freeBuffer();
-    // freeGaugeBuffer();
   }
   MPICommunicator (void* gauge, void* fermion_in, void* fermion_out, int Lx, int Ly, int Lz, int Lt) : gauge_(static_cast<Complex*>(gauge)), fermion_in_(static_cast<Complex*>(fermion_in)), fermion_out_(static_cast<Complex*>(fermion_out)), Lx_(Lx), Ly_(Ly), Lz_(Lz), Lt_(Lt){
     for (int i = 0; i < Nd; i++) {
@@ -152,7 +150,6 @@ public:
 
   void preDslash(void* fermion_in, int parity, int invert_flag);
   void postDslash(void* fermion_out, int parity, int invert_flag);
-  void sendBoundaryVector(int direction);
   void recvBoundaryVector(int direction);
   void prepareFrontBoundaryVector(void* fermion_in, int direction, int parity, int invert_flag);
   void prepareGauge();
@@ -178,8 +175,4 @@ public:
   void freeGaugeBuffer();
 
 
-
-  // TODO
-  // void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result);
-  void interprocess_vector_norm(void* vector, void* temp_res, int vector_length, void* result);
 };

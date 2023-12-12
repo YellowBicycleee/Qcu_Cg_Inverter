@@ -82,7 +82,8 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // test_norm2(fermion_in, param->lattice_size[0] * param->lattice_size[1] * param->lattice_size[2] * param->lattice_size[3]);
 
   // void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
-  callCloverDslashCoalesced(fermion_out, fermion_in, qcu_gauge, param, parity, 0); 
+
+  callCloverDslash(fermion_out, fermion_in, gauge, param, parity, 0); 
 }
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);

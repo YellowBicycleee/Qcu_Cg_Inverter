@@ -220,21 +220,36 @@ __global__ void reduce_norm2_gpu(void* partial_result, int partial_length) {
 
 void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result) {
   int block_size = MAX_BLOCK_SIZE;
-  int grid_size = (vector_length + block_size * Ns * Nc -1 ) / (block_size * Ns * Nc);
+  int grid_size = (vector_length + block_size - 1 ) / block_size;
 
   norm2_gpu<<<grid_size, block_size>>> (vector, temp_res, vector_length, result);
   checkCudaErrors(cudaDeviceSynchronize());
   // reduce
   reduce_norm2_gpu<<<1, block_size>>>(temp_res, grid_size);
+  checkCudaErrors(cudaDeviceSynchronize());
   double square_norm2;
   double res;
   checkCudaErrors(cudaMemcpy(&square_norm2, temp_res, sizeof(double), cudaMemcpyDeviceToHost));
   res = sqrt(square_norm2);
   checkCudaErrors(cudaMemcpy(result, &res, sizeof(double), cudaMemcpyHostToDevice));
+
 #ifdef DEBUG
   printf(RED"file <%s>, line <%d>, function <%s>, norm2 in process = %lf\n", __FILE__, __LINE__, __FUNCTION__, res);
   printf(CLR"");
 #endif
+
+  // Complex* host_vector1;
+  // double square_norm1 = 0;
+  // host_vector1 = new Complex[vector_length];
+  // // checkCudaErrors(cudaMalloc(&host_vector1, sizeof(Complex) * vector_length));
+  // checkCudaErrors(cudaMemcpy(host_vector1, vector, sizeof(Complex) * vector_length, cudaMemcpyDeviceToHost));
+  // for (int i = 0; i < vector_length; i++) {
+  //   square_norm1 += host_vector1[i].norm2() * host_vector1[i].norm2();
+  // }
+  // double res1 = sqrt(square_norm1);
+  // checkCudaErrors(cudaMemcpy(result, &res1, sizeof(double), cudaMemcpyHostToDevice));
+  // printf("gpu_norm = %.32lf, cpu_norm = %.32lf, diff = %g\n", res, res1, res - res1);
+  // delete []host_vector1;
 }
 
 

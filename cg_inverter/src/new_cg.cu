@@ -13,11 +13,11 @@
 #include "qcu_wilson_dslash_neo.cuh"
 #include "qcu_shift_storage_complex.cuh"
 #define DEBUG
-#define COALESCED_CG
+// #define COALESCED_CG
 
 extern MPICommunicator *mpi_comm;
 extern void* qcu_gauge;
-
+extern int process_rank;
 
 
 // function pointers
@@ -162,7 +162,8 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
                 cudaMemcpyDeviceToDevice);
   cloverVectorHalfFuntion (current_b_buffer, nullptr, gauge, param, parity);  // Ax ---> current_b_buffer
 
-  gpu_vector_norm2 (target_b, temp_vec3, half_vol, d_norm1);
+  //gpu_vector_norm2 (target_b, temp_vec3, half_vol, d_norm1);
+  mpi_comm->interprocess_vector_norm(target_b, temp_vec3, half_vol, d_norm1);
 
   qcuCudaMemcpy (temp_vec2, target_b, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);     // target_b -----> temp_vec2
@@ -171,11 +172,13 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
   mpi_comm->interprocess_saxpy_barrier(current_b_buffer, temp_vec2, d_coeff, \
                 half_vol); // temp_vec2 <--- target_b - current_b
 
-  gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
+  // gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
+  mpi_comm->interprocess_vector_norm(temp_vec2, temp_vec3, half_vol, d_norm2);
+
   qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
 #ifdef DEBUG
-  printf("even difference :norm = %.64lf\n", h_norm2 / h_norm1);
+  printf("rank = %d, even difference :norm = %g, h_norm2 = %g, h_norm1=%g\n", process_rank, h_norm2 / h_norm1, h_norm2, h_norm1);
 #endif
   return (h_norm2 / h_norm1 < 7e-15); // which means converge
 }
@@ -201,7 +204,8 @@ bool if_odd_converge(void* current_x, void* current_b_buffer, void* target_b, \
   full_odd_matrix_mul_vector (current_b_buffer, current_x, \
                 temp_vec1, temp_vec2, temp_vec3, gauge, d_kappa, param, kappa);
 
-  gpu_vector_norm2 (target_b, temp_vec3, half_vol, d_norm1);
+  // gpu_vector_norm2 (target_b, temp_vec3, half_vol, d_norm1);
+  mpi_comm->interprocess_vector_norm (target_b, temp_vec3, half_vol, d_norm1);
 
   qcuCudaMemcpy (temp_vec2, target_b, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);     // target_b -----> temp_vec2
@@ -210,13 +214,16 @@ bool if_odd_converge(void* current_x, void* current_b_buffer, void* target_b, \
   mpi_comm->interprocess_saxpy_barrier(current_b_buffer, temp_vec2, d_coeff, \
                 half_vol); // temp_vec2 <--- target_b - current_b
 
-  gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
+  // gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
+  mpi_comm->interprocess_vector_norm(temp_vec2, temp_vec3, half_vol, d_norm2);
   qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
 #ifdef DEBUG
-  printf("difference %.64lf\n", h_norm2 / h_norm1);
+  // printf("difference %.64lf, \n h_norm1= %.64lf, \n h_norm2 = %.64lf\n", h_norm2 / h_norm1, h_norm1, h_norm2);
+  // printf("difference %g\n", h_norm2 / h_norm1);
+  printf("rank = %d, odd difference :norm = %g, h_norm2 = %g, h_norm1=%g\n", process_rank, h_norm2 / h_norm1, h_norm2, h_norm1);
 #endif
-  return (h_norm2 / h_norm1 < 7e-15); // which means converge
+  return (h_norm2 / h_norm1 < 1e-15); // which means converge
 }
 
 bool odd_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec, \
@@ -396,6 +403,7 @@ bool even_cg_inverter (void* iter_x_even, void* target_b, void* resid_vec, void*
   Complex h_coeff;
 
   clear_vector (iter_x_even, half_vol * Ns * Nc);  // x <-- 0
+  // checkCudaErrors(cudaMemset(iter_x_even, 0, sizeof(double) * 2 * half_vol * Ns * Nc));
   // b - Ax --->r
   qcuCudaMemcpy (resid_vec, target_b, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);      // r <-- b
@@ -454,6 +462,7 @@ bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p
   Complex h_coeff;
 
   clear_vector (iter_x_odd, half_vol * Ns * Nc);  // x <-- 0
+  // checkCudaErrors(cudaMemset(iter_x_odd, 0, sizeof(double) * 2 * half_vol * Ns * Nc));
   // b - Ax --->r
   qcuCudaMemcpy (resid_vec, target_b, sizeof(Complex) * half_vol * Ns * Nc, \
                 cudaMemcpyDeviceToDevice);      // r <-- b

@@ -1144,11 +1144,6 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
   checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
 
   dagger_flag_double = (dagger_flag == 0) ? 1.0 : -1.0;
-  // if (dagger_flag == 0) {
-  //   h_flag = Complex(1, 0);
-  // } else {
-  //   h_flag = Complex(-1, 0);
-  // }
   checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
   Complex* h_addr;
@@ -1156,6 +1151,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
   int boundary_length;
 
   // Barrier
+  #pragma omp parallel num_threads(4)
   for (int i = 0; i < Nd; i++) {
     int length[Nd] = {Lx_, Ly_, Lz_, Lt_};
     length[i] = 1;
@@ -1174,21 +1170,22 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
         (i == Z_DIRECTION && grid_z > 1) ||
         (i == X_DIRECTION && grid_x > 1)
     ) {
-      h_addr = mpi_comm->getHostRecvBufferAddr(FRONT, i);
-      d_addr = mpi_comm->getRecvBufferAddr(FRONT, i);
+      h_addr = getHostRecvBufferAddr(FRONT, i);
+      d_addr = getRecvBufferAddr(FRONT, i);
       MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
       checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
     }
+
     void *args1[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &dagger_flag_double};
     if (i == T_DIRECTION && grid_t > 1) {
       // recv from front
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryT, subGridDim, blockDim, args1));
       // checkCudaErrors(cudaDeviceSynchronize());
 
-      // Complex* h_front_buffer = mpi_comm->getHostRecvBufferAddr(FRONT, i);
-      // Complex* h_back_buffer = mpi_comm->getHostRecvBufferAddr(BACK, i);
-      // Complex* d_front_buffer = mpi_comm->getRecvBufferAddr(FRONT, i);
-      // Complex* d_back_buffer = mpi_comm->getRecvBufferAddr(BACK, i);
+      // Complex* h_front_buffer = getHostRecvBufferAddr(FRONT, i);
+      // Complex* h_back_buffer = getHostRecvBufferAddr(BACK, i);
+      // Complex* d_front_buffer = getRecvBufferAddr(FRONT, i);
+      // Complex* d_back_buffer = getRecvBufferAddr(BACK, i);
       // void *args[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_back_buffer, &d_front_buffer, &dagger_flag_double};
       // checkCudaErrors(cudaMemcpy(d_front_buffer, h_front_buffer, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       // checkCudaErrors(cudaMemcpy(d_back_buffer, h_back_buffer, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
@@ -1212,8 +1209,8 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
         (i == Z_DIRECTION && grid_z > 1) ||
         (i == X_DIRECTION && grid_x > 1)
     ) {
-      h_addr = mpi_comm->getHostRecvBufferAddr(BACK, i);
-      d_addr = mpi_comm->getRecvBufferAddr(BACK, i);
+      h_addr = getHostRecvBufferAddr(BACK, i);
+      d_addr = getRecvBufferAddr(BACK, i);
       MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
       checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
     }
@@ -1244,6 +1241,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
   // calc result
   checkCudaErrors(cudaFree(d_flag_ptr));
 
+  #pragma omp parallel num_threads(4)
   for (int i = 0; i < Nd; i++) 
   {
     if ((i == T_DIRECTION && grid_t > 1) || 
@@ -1280,12 +1278,12 @@ void MPICommunicator::sendBoundaryVector(int direction) {
       (direction == X_DIRECTION && grid_x > 1) )
   {
     // to front
-    h_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
+    h_addr = getHostSendBufferAddr(FRONT, direction);
     dst_process = grid_front[direction];
     MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
 
     // to back
-    h_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
+    h_addr = getHostSendBufferAddr(BACK, direction);
     dst_process = grid_back[direction];
     MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
   }
@@ -1367,8 +1365,6 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
 
-  // Complex* h_addr;
-  // Complex* d_addr;
   Complex* h_front_addr;
   Complex* h_back_addr;
   Complex* d_front_addr;
@@ -1388,11 +1384,8 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   dim3 blockDim(BLOCK_SIZE);
 
   // front
-  // dst_process = grid_front[direction];
-  h_front_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
-  d_front_addr = mpi_comm->getSendBufferAddr(FRONT, direction);
-  // h_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
-  // d_addr = mpi_comm->getSendBufferAddr(FRONT, direction);
+  h_front_addr = getHostSendBufferAddr(FRONT, direction);
+  d_front_addr = getSendBufferAddr(FRONT, direction);
 
   void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
   if (direction == T_DIRECTION && grid_t > 1) {
@@ -1405,22 +1398,11 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontX, subGridDim, blockDim, args1));
   }
 
-  // if ((direction == T_DIRECTION && grid_t > 1) || 
-  //     (direction == Z_DIRECTION && grid_z > 1) || 
-  //     (direction == Y_DIRECTION && grid_y > 1) ||
-  //     (direction == X_DIRECTION && grid_x > 1)
-  // ) {
-  //   checkCudaErrors(cudaDeviceSynchronize());
-  //   checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-  // }
 
 
   // back
-  // dst_process = grid_back[direction];
-  h_back_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
-  d_back_addr = mpi_comm->getSendBufferAddr(BACK, direction);
-  // h_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
-  // d_addr = mpi_comm->getSendBufferAddr(BACK, direction);
+  h_back_addr = getHostSendBufferAddr(BACK, direction);
+  d_back_addr = getSendBufferAddr(BACK, direction);
 
   void *args2[] = {&fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_back_addr};
   if (direction == T_DIRECTION && grid_t > 1) {
@@ -1432,15 +1414,6 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   } else if (direction == X_DIRECTION && grid_x > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackX, subGridDim, blockDim, args2));
   }
-
-  // if ((direction == T_DIRECTION && grid_t > 1) || 
-  //     (direction == Z_DIRECTION && grid_z > 1) || 
-  //     (direction == Y_DIRECTION && grid_y > 1) ||
-  //     (direction == X_DIRECTION && grid_x > 1)
-  // ) {
-  //   checkCudaErrors(cudaDeviceSynchronize());
-  //   checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-  // }
 
   checkCudaErrors(cudaFree(d_flag_ptr));
 }

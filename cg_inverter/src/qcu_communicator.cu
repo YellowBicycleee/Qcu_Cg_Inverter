@@ -1038,8 +1038,6 @@ void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
   // #pragma omp parallel num_threads(4)
   for (int i = 0; i < Nd; i++) {
     // calc Boundary and send Boundary
-    // printf(RED"rank of thread = %d, number of thread = %d\n", omp_get_thread_num(), omp_get_num_threads());
-    // printf(CLR"");
     prepareFrontBoundaryVector (fermion_in, i, parity, invert_flag);
   }
   // checkCudaErrors(cudaStreamSynchronize(NULL));
@@ -1054,13 +1052,13 @@ void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
   }
 }
 
-void MPICommunicator::postDslash(void* fermion_out, int parity, int invert_flag) {
-  assert (invert_flag == 0 || invert_flag == 1);
+void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag) {
+  assert (dagger_flag == 0 || dagger_flag == 1);
   Complex h_flag;
   Complex* d_flag_ptr;
   checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
 
-  if (invert_flag == 0) {
+  if (dagger_flag == 0) {
     h_flag = Complex(1, 0);
   } else {
     h_flag = Complex(-1, 0);
@@ -1085,62 +1083,65 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int invert_flag)
     dim3 subGridDim(sub_vol / BLOCK_SIZE);
     dim3 blockDim(BLOCK_SIZE);
 
-    h_addr = mpi_comm->getHostRecvBufferAddr(FRONT, i);
-    d_addr = mpi_comm->getRecvBufferAddr(FRONT, i);
-    // src_process = grid_front[i];
-    //calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer)
+    if ((i == T_DIRECTION && grid_t > 1) ||
+        (i == Z_DIRECTION && grid_z > 1) || 
+        (i == Z_DIRECTION && grid_z > 1) ||
+        (i == X_DIRECTION && grid_x > 1)
+    ) {
+      h_addr = mpi_comm->getHostRecvBufferAddr(FRONT, i);
+      d_addr = mpi_comm->getRecvBufferAddr(FRONT, i);
+      MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
+      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
+    }
     void *args1[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &d_flag_ptr};
     if (i == T_DIRECTION && grid_t > 1) {
       // recv from front
-      MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryT, subGridDim, blockDim, args1));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     } else if (i == Z_DIRECTION && grid_z > 1) {
       // recv from front
-      MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryZ, subGridDim, blockDim, args1));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     } else if (i == Y_DIRECTION && grid_y > 1) {
       // recv from front
-      MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryY, subGridDim, blockDim, args1));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     } else if (i == X_DIRECTION && grid_x > 1) {
       // recv from front
-      MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryX, subGridDim, blockDim, args1));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     }
 
-    h_addr = mpi_comm->getHostRecvBufferAddr(BACK, i);
-    d_addr = mpi_comm->getRecvBufferAddr(BACK, i);
-    // src_process = grid_back[i];
-    // recv from front
-    // calculateBackBoundaryT(void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer)
+    if ((i == T_DIRECTION && grid_t > 1) ||
+        (i == Z_DIRECTION && grid_z > 1) || 
+        (i == Z_DIRECTION && grid_z > 1) ||
+        (i == X_DIRECTION && grid_x > 1)
+    ) {
+      h_addr = mpi_comm->getHostRecvBufferAddr(BACK, i);
+      d_addr = mpi_comm->getRecvBufferAddr(BACK, i);
+      MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
+      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
+    }
     void *args2[] = {&fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr};
     if (i == T_DIRECTION && grid_t > 1) {
-      MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateBackBoundaryT, subGridDim, blockDim, args2));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     } else if (i == Z_DIRECTION && grid_z > 1) {
-      MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateBackBoundaryZ, subGridDim, blockDim, args2));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     } else if (i == Y_DIRECTION && grid_y > 1) {
-      MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateBackBoundaryY, subGridDim, blockDim, args2));
-      checkCudaErrors(cudaDeviceSynchronize());
+      // checkCudaErrors(cudaDeviceSynchronize());
     } else if (i == X_DIRECTION && grid_x > 1) {
-      MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
-      checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
       checkCudaErrors(cudaLaunchKernel((void *)calculateBackBoundaryX, subGridDim, blockDim, args2));
+      // checkCudaErrors(cudaDeviceSynchronize());
+    }
+
+    if ((i == T_DIRECTION && grid_t > 1) ||
+        (i == Z_DIRECTION && grid_z > 1) || 
+        (i == Z_DIRECTION && grid_z > 1) ||
+        (i == X_DIRECTION && grid_x > 1)
+    ) {
       checkCudaErrors(cudaDeviceSynchronize());
     }
   }

@@ -44,6 +44,14 @@ static __device__ __forceinline__ void loadVector(Complex* src_local, void* ferm
     src_local[i] = src[i];
   }
 }
+
+static __device__ __forceinline__ void storeVector(Complex* src_local, void* fermion_out, const Point& p, int Lx, int Ly, int Lz, int Lt) {
+  Complex* src = p.getPointVector(static_cast<Complex *>(fermion_out), Lx, Ly, Lz, Lt);
+  for (int i = 0; i < Ns * Nc; i++) {
+    src[i] = src_local[i];
+  }
+}
+
 __global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {
   // 前传传结果
   int sub_Lx = (Lx >> 1);
@@ -349,14 +357,13 @@ __global__ void calculateBackBoundaryX(void *fermion_out, int Lx, int Ly, int Lz
   }
 
 }
-__global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, void* flag_ptr) {
+__global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
   int sub_Lx = (Lx >> 1);
   int sub_Ly = (Ly >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;   // 注意这里乘以2
   int t = thread / (Lz * sub_Ly);
   int z = thread % (Lz * sub_Ly) / sub_Ly;
   int sub_y = thread % sub_Ly;
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   int new_even_odd = (z+t) & 0x01;  // %2
   Point p(sub_Lx-1, 2 * sub_y + (new_even_odd == parity), z, t, parity);
@@ -380,13 +387,13 @@ __global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - flag * src_local[3 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * Complex(0, 1) * flag;
+      dst_local[3 * Nc + i] += temp * Complex(0, 1) * dagger_flag_double;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - flag * src_local[2 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * Complex(0, 1) * flag;
+      dst_local[2 * Nc + i] += temp * Complex(0, 1) * dagger_flag_double;
     }
   }
 
@@ -423,7 +430,7 @@ __global__ void calculateBackBoundaryY(void *fermion_out, int Lx, int Ly, int Lz
   }
 }
 
-__global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, void* flag_ptr) {
+__global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
   // 后接接结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -431,7 +438,6 @@ __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, 
   int z = thread % (Lz * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, Ly-1, z, t, parity);
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
   Complex temp;
   Complex* src_ptr;
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
@@ -452,13 +458,13 @@ __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] + flag * src_local[3 * Nc + j]) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] + src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * flag;
+      dst_local[3 * Nc + i] += temp * dagger_flag_double;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - flag * src_local[2 * Nc + j]) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += -temp * flag;
+      dst_local[2 * Nc + i] += -temp * dagger_flag_double;
     }
   }
 
@@ -494,7 +500,7 @@ __global__ void calculateBackBoundaryZ(void *fermion_out, int Lx, int Ly, int Lz
   }
 }
 
-__global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, void* flag_ptr) {
+__global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
   // 后接接结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -502,7 +508,6 @@ __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, 
   int y = thread % (Ly * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, y, Lz-1, t, parity);
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   Complex temp;
   Complex* src_ptr;
@@ -524,13 +529,13 @@ __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - flag * src_local[2 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * Complex(0, 1) * flag;
+      dst_local[2 * Nc + i] += temp * Complex(0, 1) * dagger_flag_double;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] + flag * src_local[3 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] + src_local[3 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * Complex(0, -1) * flag;
+      dst_local[3 * Nc + i] += temp * Complex(0, -1) * dagger_flag_double;
     }
   }
 
@@ -569,7 +574,7 @@ __global__ void calculateBackBoundaryT(void *fermion_out, int Lx, int Ly, int Lz
   }
 }
 
-__global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, void* flag_ptr) {
+__global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
   // 后接接结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -577,7 +582,6 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
   int y = thread % (Ly * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, y, z, Lt-1, parity);
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   Complex temp;
   Complex* src_ptr;
@@ -599,16 +603,84 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - flag * src_local[2 * Nc + j]) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += -temp * flag;
+      dst_local[2 * Nc + i] += -temp * dagger_flag_double;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - flag * src_local[3 * Nc + j]) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += -temp * flag;
+      dst_local[3 * Nc + i] += -temp * dagger_flag_double;
     }
   }
 
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_ptr[i] = dst_local[i];
+  }
+}
+
+
+// combine front and back : T
+__global__ void calculateBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* back_buffer, Complex* front_buffer, double dagger_flag_double) {
+  // back
+  int sub_Lx = (Lx >> 1);
+  int thread = blockIdx.x * blockDim.x + threadIdx.x;
+  int z = thread / (Ly * sub_Lx);
+  int y = thread % (Ly * sub_Lx) / sub_Lx;
+  int x = thread % sub_Lx;
+
+  Point p;
+
+  Complex* src_ptr;
+  Complex* dst_ptr;
+  Complex src_local[Ns * Nc];
+  Complex dst_local[Ns * Nc];
+  Complex u_local[Nc * Nc];
+  Complex temp;
+
+  p = Point(x, y, z, 0, parity);
+
+  dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
+  loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
+
+  // load back buffer
+  src_ptr = back_buffer + thread * Ns * Nc;
+  for (int i = 0; i < Ns * Nc; i++) {
+    src_local[i] = src_ptr[i];
+  }
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_local[i] += src_local[i];
+  }
+
+  // front
+  p = Point(x, y, z, Lt-1, parity);
+  dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
+
+  loadGauge(u_local, gauge, T_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
+  // loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
+
+  src_ptr = front_buffer + thread * Ns * Nc;//((z * Ly + y) * sub_Lx + x) * Ns * Nc;
+
+  for (int i = 0; i < Ns * Nc; i++) {
+    src_local[i] = src_ptr[i];
+  }
+  // save back result
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_ptr[i] = dst_local[i];
+  }
+
+  for (int i = 0; i < Nc; i++) {
+    for (int j = 0; j < Nc; j++) {
+      // first row vector with col vector
+      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+      dst_local[0 * Nc + i] += temp;
+      dst_local[2 * Nc + i] += -temp * dagger_flag_double;
+      // second row vector with col vector
+      temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+      dst_local[1 * Nc + i] += temp;
+      dst_local[3 * Nc + i] += -temp * dagger_flag_double;
+    }
+  }
+  // save front result
   for (int i = 0; i < Ns * Nc; i++) {
     dst_ptr[i] = dst_local[i];
   }
@@ -1035,17 +1107,26 @@ MPICommunicator *mpi_comm;
 
 
 void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
-  // #pragma omp parallel num_threads(4)
+  #pragma omp parallel num_threads(4)
   for (int i = 0; i < Nd; i++) {
     // calc Boundary and send Boundary
     prepareFrontBoundaryVector (fermion_in, i, parity, invert_flag);
   }
-  // checkCudaErrors(cudaStreamSynchronize(NULL));
+  checkCudaErrors(cudaStreamSynchronize(NULL));
+
+  // copy from host to device
+  #pragma omp parallel num_threads(4)
+  for (int i = 0; i < Nd; i++) {
+    sendVecBarrier(i);
+  }
+
+  #pragma omp parallel num_threads(4)
   for (int i = 0; i < Nd; i++) {
     // recv Boundary
     recvBoundaryVector(i);
   }
   checkCudaErrors(cudaStreamSynchronize(NULL));
+  #pragma omp parallel num_threads(4)
   for (int i = 0; i < Nd; i++) {
     // recv Boundary
     sendBoundaryVector(i);
@@ -1056,13 +1137,18 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
   assert (dagger_flag == 0 || dagger_flag == 1);
   Complex h_flag;
   Complex* d_flag_ptr;
+
+  double dagger_flag_double;
+
+
   checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
 
-  if (dagger_flag == 0) {
-    h_flag = Complex(1, 0);
-  } else {
-    h_flag = Complex(-1, 0);
-  }
+  dagger_flag_double = (dagger_flag == 0) ? 1.0 : -1.0;
+  // if (dagger_flag == 0) {
+  //   h_flag = Complex(1, 0);
+  // } else {
+  //   h_flag = Complex(-1, 0);
+  // }
   checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
   Complex* h_addr;
@@ -1093,11 +1179,20 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
       MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
       checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
     }
-    void *args1[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &d_flag_ptr};
+    void *args1[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &dagger_flag_double};
     if (i == T_DIRECTION && grid_t > 1) {
       // recv from front
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryT, subGridDim, blockDim, args1));
       // checkCudaErrors(cudaDeviceSynchronize());
+
+      // Complex* h_front_buffer = mpi_comm->getHostRecvBufferAddr(FRONT, i);
+      // Complex* h_back_buffer = mpi_comm->getHostRecvBufferAddr(BACK, i);
+      // Complex* d_front_buffer = mpi_comm->getRecvBufferAddr(FRONT, i);
+      // Complex* d_back_buffer = mpi_comm->getRecvBufferAddr(BACK, i);
+      // void *args[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_back_buffer, &d_front_buffer, &dagger_flag_double};
+      // checkCudaErrors(cudaMemcpy(d_front_buffer, h_front_buffer, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
+      // checkCudaErrors(cudaMemcpy(d_back_buffer, h_back_buffer, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
+      // checkCudaErrors(cudaLaunchKernel((void *)calculateBoundaryT, subGridDim, blockDim, args));
     } else if (i == Z_DIRECTION && grid_z > 1) {
       // recv from front
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryZ, subGridDim, blockDim, args1));
@@ -1122,6 +1217,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
       MPI_Wait(&recv_back_req[i], &recv_back_status[i]);
       checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
     }
+
     void *args2[] = {&fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr};
     if (i == T_DIRECTION && grid_t > 1) {
       checkCudaErrors(cudaLaunchKernel((void *)calculateBackBoundaryT, subGridDim, blockDim, args2));
@@ -1231,6 +1327,31 @@ void MPICommunicator::recvBoundaryVector(int direction) {
   }
 }
 
+void MPICommunicator::sendVecBarrier(int direction) {
+  int length[Nd] = {Lx_, Ly_, Lz_, Lt_};
+  length[direction] = 1;
+  int boundary_length = 1;
+  int sub_vol = 1;
+  for (int i = 0; i < Nd; i++) {
+    sub_vol *= length[i];
+  }
+  sub_vol >>= 1;  // div 2
+  boundary_length = sub_vol * (Ns * Nc);
+
+  Complex* h_front_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
+  Complex* h_back_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
+  Complex* d_front_addr = mpi_comm->getSendBufferAddr(FRONT, direction);
+  Complex* d_back_addr = mpi_comm->getSendBufferAddr(BACK, direction);;
+  if ((direction == T_DIRECTION && grid_t > 1) || 
+      (direction == Z_DIRECTION && grid_z > 1) || 
+      (direction == Y_DIRECTION && grid_y > 1) ||
+      (direction == X_DIRECTION && grid_x > 1)
+  ) {
+    checkCudaErrors(cudaMemcpyAsync(h_front_addr, d_front_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpyAsync(h_back_addr, d_back_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
+  }
+}
+
 void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction, int parity, int invert_flag) { // add parameter  invert_flag,  0---->flag(1,0)  1--->flag(-1, 0)
   assert (invert_flag == 0 || invert_flag == 1);
 
@@ -1246,8 +1367,12 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
 
-  Complex* h_addr;
-  Complex* d_addr;
+  // Complex* h_addr;
+  // Complex* d_addr;
+  Complex* h_front_addr;
+  Complex* h_back_addr;
+  Complex* d_front_addr;
+  Complex* d_back_addr;
 
   // int dst_process;
   int length[Nd] = {Lx_, Ly_, Lz_, Lt_};
@@ -1264,11 +1389,12 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
 
   // front
   // dst_process = grid_front[direction];
-  h_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
-  d_addr = mpi_comm->getSendBufferAddr(FRONT, direction);
+  h_front_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
+  d_front_addr = mpi_comm->getSendBufferAddr(FRONT, direction);
+  // h_addr = mpi_comm->getHostSendBufferAddr(FRONT, direction);
+  // d_addr = mpi_comm->getSendBufferAddr(FRONT, direction);
 
-
-  void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &d_flag_ptr};
+  void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
   if (direction == T_DIRECTION && grid_t > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontT, subGridDim, blockDim, args1));
   } else if (direction == Z_DIRECTION && grid_z > 1) {
@@ -1279,26 +1405,24 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontX, subGridDim, blockDim, args1));
   }
 
-  if ((direction == T_DIRECTION && grid_t > 1) || 
-      (direction == Z_DIRECTION && grid_z > 1) || 
-      (direction == Y_DIRECTION && grid_y > 1) ||
-      (direction == X_DIRECTION && grid_x > 1)
-  ) {
-    checkCudaErrors(cudaDeviceSynchronize());
-#ifdef DEBUG
-  printf("rank = %d, direction = %d, front, h_addr=%p, d_addr=%p\n", process_rank, direction, h_addr, d_addr);
-#endif
-    checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    // MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, FRONT, MPI_COMM_WORLD, &send_front_req[direction]);
-  }
+  // if ((direction == T_DIRECTION && grid_t > 1) || 
+  //     (direction == Z_DIRECTION && grid_z > 1) || 
+  //     (direction == Y_DIRECTION && grid_y > 1) ||
+  //     (direction == X_DIRECTION && grid_x > 1)
+  // ) {
+  //   checkCudaErrors(cudaDeviceSynchronize());
+  //   checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
+  // }
 
 
   // back
   // dst_process = grid_back[direction];
-  h_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
-  d_addr = mpi_comm->getSendBufferAddr(BACK, direction);
+  h_back_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
+  d_back_addr = mpi_comm->getSendBufferAddr(BACK, direction);
+  // h_addr = mpi_comm->getHostSendBufferAddr(BACK, direction);
+  // d_addr = mpi_comm->getSendBufferAddr(BACK, direction);
 
-  void *args2[] = {&fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr};
+  void *args2[] = {&fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_back_addr};
   if (direction == T_DIRECTION && grid_t > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackT, subGridDim, blockDim, args2));
   } else if (direction == Z_DIRECTION && grid_z > 1) {
@@ -1309,18 +1433,14 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackX, subGridDim, blockDim, args2));
   }
 
-  if ((direction == T_DIRECTION && grid_t > 1) || 
-      (direction == Z_DIRECTION && grid_z > 1) || 
-      (direction == Y_DIRECTION && grid_y > 1) ||
-      (direction == X_DIRECTION && grid_x > 1)
-  ) {
-    checkCudaErrors(cudaDeviceSynchronize());
-#ifdef DEBUG
-  printf("rank = %d, back, direction = %d, h_addr=%p, d_addr=%p\n", process_rank, direction, h_addr, d_addr);
-#endif
-    checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
-    // MPI_Isend(h_addr, boundary_length * 2, MPI_DOUBLE, dst_process, BACK, MPI_COMM_WORLD, &send_back_req[direction]);
-  }
+  // if ((direction == T_DIRECTION && grid_t > 1) || 
+  //     (direction == Z_DIRECTION && grid_z > 1) || 
+  //     (direction == Y_DIRECTION && grid_y > 1) ||
+  //     (direction == X_DIRECTION && grid_x > 1)
+  // ) {
+  //   checkCudaErrors(cudaDeviceSynchronize());
+  //   checkCudaErrors(cudaMemcpyAsync(h_addr, d_addr, sizeof(Complex) * boundary_length, cudaMemcpyDeviceToHost));
+  // }
 
   checkCudaErrors(cudaFree(d_flag_ptr));
 }

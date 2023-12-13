@@ -182,4 +182,5 @@ public:
   // TODO
   // void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result);
   void interprocess_vector_norm(void* vector, void* temp_res, int vector_length, void* result);
+  void sendVecBarrier(int direction);
 };

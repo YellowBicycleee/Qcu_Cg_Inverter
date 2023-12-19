@@ -383,6 +383,22 @@ bool even_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec
 }
 
 
+bool even_solver (void* iter_x_even, void* target_b, void* temp_vec, QcuParam *param) {
+  bool if_converge;
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  int vol = Lx * Ly * Lz * Lt;
+  int half_vol = vol >> 1;
+  int parity;
+  double difference;
+  qcuCudaMemcpy(iter_x_even, target_b, sizeof(Complex) * half_vol * Ns * Nc, cudaMemcpyDeviceToDevice);
+
+  parity = 0;
+  invertCloverDslashHalfFunction (iter_x_even, nullptr, nullptr, param, parity);
+  return true;
+}
 
 // cg_even
 bool even_cg_inverter (void* iter_x_even, void* target_b, void* resid_vec, void* p_vec,
@@ -706,12 +722,14 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   // even b
   generate_new_b_even (new_b, origin_even_b, odd_x,
                             gauge, d_kappa, d_coeff, param, kappa);
+  // TODO:
+  // if_end = even_cg_inverter (even_x, new_b, resid_vec, p_vec, \
+  //                           temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
+  //                           gauge, param, kappa, d_kappa, d_alpha, d_beta, \
+  //                           d_denominator, d_numerator, d_coeff, d_norm1, d_norm2
+  // );
 
-  if_end = even_cg_inverter (even_x, new_b, resid_vec, p_vec, \
-                            temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
-                            gauge, param, kappa, d_kappa, d_alpha, d_beta, \
-                            d_denominator, d_numerator, d_coeff, d_norm1, d_norm2
-  );
+  if_end = even_solver(even_x, new_b, temp_vec1, param);
   if (!if_end) {
     printf("even cg failed, then exit\n");
     goto cg_end;

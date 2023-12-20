@@ -123,8 +123,6 @@ __global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int L
   Point dst_p(x, 0, z, t, 0); // parity is useless
   Complex flag = *(static_cast<Complex*>(flag_ptr));
 
-  // Complex* dst_ptr;
-
   Complex src_local[Ns * Nc];
   Complex u_local[Nc * Nc];
   Complex dst_local[Ns * Nc];
@@ -132,8 +130,6 @@ __global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int L
   loadVector(src_local, fermion_in, p, sub_Lx, Ly, Lz, Lt);
   loadGauge(u_local, gauge, Y_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
 
-  // even save to even, odd save to even
-  // dst_ptr = send_buffer + thread*Ns*Nc;
 
   for (int i = 0; i < Ns * Nc; i++) {
     dst_local[i].clear2Zero();
@@ -152,9 +148,6 @@ __global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int L
     }
   }
 
-  // for (int i = 0; i < Ns * Nc; i++) {
-  //   dst_ptr[i] = dst_local[i];
-  // }
   storeVector(dst_local, send_buffer, dst_p, sub_Lx, 1, Lz, Lt);
 }
 __global__ void DslashTransferBackY(void *fermion_in, int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer) {
@@ -165,16 +158,11 @@ __global__ void DslashTransferBackY(void *fermion_in, int Lx, int Ly, int Lz, in
   int z = thread % (Lz * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, 0, z, t, 1-parity);
-
-  Complex* dst_ptr;
+  Point dst_p(x, 0, z, t, 0); // parity is useless
   Complex src_local[Ns * Nc];
 
   loadVector(src_local, fermion_in, p, sub_Lx, Ly, Lz, Lt);
-
-  dst_ptr = send_buffer + thread * Ns * Nc;
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = src_local[i];
-  }
+  storeVector(src_local, send_buffer, dst_p, sub_Lx, 1, Lz, Lt);
 }
 // DslashTransferFrontZ: DONE
 __global__ void DslashTransferFrontZ(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {

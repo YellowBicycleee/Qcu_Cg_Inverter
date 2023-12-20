@@ -510,25 +510,19 @@ __global__ void calculateBackBoundaryT(void *fermion_out, int Lx, int Ly, int Lz
   int y = thread % (Ly * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, y, z, 0, parity);
-
-  Complex* src_ptr;
+  Point buffer_p(x, y, z, 0, 0); // parity is useless
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
   Complex dst_local[Ns * Nc];
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-  src_ptr = recv_buffer + thread*Ns*Nc;
+  loadVector(src_local, recv_buffer, buffer_p, sub_Lx, Ly, Lz, 1);
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
   for (int i = 0; i < Ns * Nc; i++) {
     dst_local[i] += src_local[i];
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
 __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
@@ -539,9 +533,8 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
   int y = thread % (Ly * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, y, z, Lt-1, parity);
-
+  Point buffer_p(x, y, z, 0, 0); // parity is useless
   Complex temp;
-  Complex* src_ptr;
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
@@ -550,12 +543,7 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
 
   loadGauge(u_local, gauge, 3, p, sub_Lx, Ly, Lz, Lt);
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-
-  src_ptr = recv_buffer + thread * Ns * Nc;//((z * Ly + y) * sub_Lx + x) * Ns * Nc;
-
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
+  loadVector(src_local, recv_buffer, buffer_p, sub_Lx, Ly, Lz, 1);
 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
@@ -570,9 +558,7 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
     }
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
 
@@ -586,7 +572,6 @@ __global__ void calculateBoundaryT(void* gauge, void *fermion_out, int Lx, int L
   int x = thread % sub_Lx;
 
   Point p;
-
   Complex* src_ptr;
   Complex* dst_ptr;
   Complex src_local[Ns * Nc];

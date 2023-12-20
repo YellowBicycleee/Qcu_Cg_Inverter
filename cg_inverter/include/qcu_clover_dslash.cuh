@@ -38,4 +38,5 @@ void shiftCloverStorage(void* dst_vec, void* src_vec, int Lx, int Ly, int Lz, in
 void cloverVectorHalfCoalesced (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity);
 void invertCloverDslashHalfCoalesced (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity);
 
+void callCloverDslashCoalesced_full(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
 void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);

@@ -1194,8 +1194,9 @@ static void *coalesced_fermion_in;
 static void * coalesced_fermion_out;
 static bool memory_allocated = false;
 extern void *qcu_gauge;
-void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
-  
+
+void callCloverDslashCoalesced_full(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
   int Lz = param->lattice_size[2];
@@ -1210,11 +1211,38 @@ void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge,
 
   shiftVectorStorageTwoDouble(coalesced_fermion_in, fermion_in, TO_COALESCE, Lx, Ly, Lz, Lt);
 
-  DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, qcu_gauge, param, parity);
+  // DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, qcu_gauge, param, parity);
+  // WilsonDslash dslash_solver(dslash_param);
+  // dslash_solver.calculateDslash(invert_flag);
+
+  // invertCloverDslashHalfCoalesced (coalesced_fermion_out, coalesced_fermion_in, gauge, param, parity);
+
+  callCloverDslashCoalesced(coalesced_fermion_out, coalesced_fermion_in, gauge, param, parity, invert_flag);
+  shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
+}
+
+void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+  
+  // int Lx = param->lattice_size[0];
+  // int Ly = param->lattice_size[1];
+  // int Lz = param->lattice_size[2];
+  // int Lt = param->lattice_size[3];
+  // int vol = Lx * Ly * Lz * Lt;
+
+  // if (!memory_allocated) {
+  //   checkCudaErrors(cudaMalloc(&coalesced_fermion_in, sizeof(double) * vol / 2 * Ns * Nc * 2));
+  //   checkCudaErrors(cudaMalloc(&coalesced_fermion_out, sizeof(double) * vol / 2 * Ns * Nc * 2));
+  //   memory_allocated = true;
+  // }
+
+  // shiftVectorStorageTwoDouble(coalesced_fermion_in, fermion_in, TO_COALESCE, Lx, Ly, Lz, Lt);
+
+  // DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, qcu_gauge, param, parity);
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   WilsonDslash dslash_solver(dslash_param);
   dslash_solver.calculateDslash(invert_flag);
 
   invertCloverDslashHalfCoalesced (coalesced_fermion_out, coalesced_fermion_in, gauge, param, parity);
 
-  shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
+  // shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
 }

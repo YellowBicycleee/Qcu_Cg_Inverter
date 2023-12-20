@@ -4,8 +4,11 @@
 #include "qcu_complex_computation.cuh"
 #include "qcu.h"
 
+#ifdef COALESCED
+#include "kernel/multi_process_coalesce.cuh"
+#else 
 #include "kernel/multi_process.cuh"
-
+#endif
 // static / global variables
 int grid_x;
 int grid_y;

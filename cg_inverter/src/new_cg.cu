@@ -13,7 +13,7 @@
 #include "qcu_wilson_dslash_neo.cuh"
 #include "qcu_shift_storage_complex.cuh"
 #define DEBUG
-// #define COALESCED_CG
+#define COALESCED_CG
 
 extern MPICommunicator *mpi_comm;
 extern void* qcu_gauge;

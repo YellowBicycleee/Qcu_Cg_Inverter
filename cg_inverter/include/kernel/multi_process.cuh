@@ -179,7 +179,7 @@ __global__ void DslashTransferFrontZ(void *gauge, void *fermion_in,int Lx, int L
   Point dst_p(x, y, 0, t, 0); // parity is useless
   Complex flag = *(static_cast<Complex*>(flag_ptr));
 
-  Complex* dst_ptr;
+  // Complex* dst_ptr;
 
   Complex src_local[Ns * Nc];
   Complex u_local[Nc * Nc];
@@ -293,26 +293,19 @@ __global__ void calculateBackBoundaryX(void *fermion_out, int Lx, int Ly, int Lz
 
   int new_even_odd = (z+t) & 0x01;  // %2
   Point p(0, 2 * sub_y + (new_even_odd != parity), z, t, parity);
-
-  Complex* src_ptr;
+  Point buffer_p(0, sub_y, z, t, 0); // parity is useless
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
   Complex dst_local[Ns * Nc];
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-  src_ptr = recv_buffer + thread*Ns*Nc;
+  loadVector(src_local, recv_buffer, buffer_p, 1, sub_Ly, Lz, Lt);
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
   for (int i = 0; i < Ns * Nc; i++) {
     dst_local[i] += src_local[i];
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
-
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 __global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
   int sub_Lx = (Lx >> 1);
@@ -324,9 +317,8 @@ __global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, 
 
   int new_even_odd = (z+t) & 0x01;  // %2
   Point p(sub_Lx-1, 2 * sub_y + (new_even_odd == parity), z, t, parity);
-
+  Point buffer_p(0, sub_y, z, t, 0); // parity is useless
   Complex temp;
-  Complex* src_ptr;
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
@@ -335,12 +327,8 @@ __global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, 
 
   loadGauge(u_local, gauge, X_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
+  loadVector(src_local, recv_buffer, buffer_p, 1, sub_Ly, Lz, Lt);
 
-  src_ptr = recv_buffer + thread * Ns * Nc;
-
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
@@ -354,9 +342,7 @@ __global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, 
     }
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
 __global__ void calculateBackBoundaryY(void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer) {
@@ -366,25 +352,19 @@ __global__ void calculateBackBoundaryY(void *fermion_out, int Lx, int Ly, int Lz
   int z = thread % (Lz * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, 0, z, t, parity);
-
-  Complex* src_ptr;
+  Point buffer_p(x, 0, z, t, 0); // parity is useless
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
   Complex dst_local[Ns * Nc];
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-  src_ptr = recv_buffer + thread*Ns*Nc;
+  loadVector(src_local, recv_buffer, buffer_p, sub_Lx, 1, Lz, Lt);
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
   for (int i = 0; i < Ns * Nc; i++) {
     dst_local[i] += src_local[i];
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
 __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
@@ -395,8 +375,8 @@ __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, 
   int z = thread % (Lz * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, Ly-1, z, t, parity);
+  Point buffer_p(x, 0, z, t, 0); // parity is useless
   Complex temp;
-  Complex* src_ptr;
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
@@ -405,12 +385,7 @@ __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, 
 
   loadGauge(u_local, gauge, Y_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-
-  src_ptr = recv_buffer + thread * Ns * Nc;
-
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
+  loadVector(src_local, recv_buffer, buffer_p, sub_Lx, 1, Lz, Lt);
 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
@@ -425,9 +400,7 @@ __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, 
     }
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 __global__ void calculateBackBoundaryZ(void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer) {
   int sub_Lx = (Lx >> 1);
@@ -436,25 +409,20 @@ __global__ void calculateBackBoundaryZ(void *fermion_out, int Lx, int Ly, int Lz
   int y = thread % (Ly * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, y, 0, t, parity);
+  Point buffer_p(x, y, 0, t, 0); // parity is useless
 
-  Complex* src_ptr;
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
   Complex dst_local[Ns * Nc];
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-  src_ptr = recv_buffer + thread*Ns*Nc;
+  loadVector(src_local, recv_buffer, buffer_p, sub_Lx, Ly, 1, Lt);
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
   for (int i = 0; i < Ns * Nc; i++) {
     dst_local[i] += src_local[i];
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
 __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
@@ -465,9 +433,8 @@ __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, 
   int y = thread % (Ly * sub_Lx) / sub_Lx;
   int x = thread % sub_Lx;
   Point p(x, y, Lz-1, t, parity);
-
+  Point buffer_p(x, y, 0, t, 0); // parity is useless
   Complex temp;
-  Complex* src_ptr;
   Complex* dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
   Complex src_local[Ns * Nc];
@@ -476,12 +443,7 @@ __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, 
 
   loadGauge(u_local, gauge, Z_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-
-  src_ptr = recv_buffer + thread * Ns * Nc;
-
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
+  loadVector(src_local, recv_buffer, buffer_p, sub_Lx, Ly, 1, Lt);
 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
@@ -496,10 +458,7 @@ __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, 
     }
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
-
+  storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
 __global__ void calculateBackBoundaryT(void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer) {
@@ -562,68 +521,68 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
 }
 
 
-// combine front and back : T
-__global__ void calculateBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* back_buffer, Complex* front_buffer, double dagger_flag_double) {
-  // back
-  int sub_Lx = (Lx >> 1);
-  int thread = blockIdx.x * blockDim.x + threadIdx.x;
-  int z = thread / (Ly * sub_Lx);
-  int y = thread % (Ly * sub_Lx) / sub_Lx;
-  int x = thread % sub_Lx;
+// // combine front and back : T
+// __global__ void calculateBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* back_buffer, Complex* front_buffer, double dagger_flag_double) {
+//   // back
+//   int sub_Lx = (Lx >> 1);
+//   int thread = blockIdx.x * blockDim.x + threadIdx.x;
+//   int z = thread / (Ly * sub_Lx);
+//   int y = thread % (Ly * sub_Lx) / sub_Lx;
+//   int x = thread % sub_Lx;
 
-  Point p;
-  Complex* src_ptr;
-  Complex* dst_ptr;
-  Complex src_local[Ns * Nc];
-  Complex dst_local[Ns * Nc];
-  Complex u_local[Nc * Nc];
-  Complex temp;
+//   Point p;
+//   Complex* src_ptr;
+//   Complex* dst_ptr;
+//   Complex src_local[Ns * Nc];
+//   Complex dst_local[Ns * Nc];
+//   Complex u_local[Nc * Nc];
+//   Complex temp;
 
-  p = Point(x, y, z, 0, parity);
+//   p = Point(x, y, z, 0, parity);
 
-  dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
-  loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
+//   dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
+//   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 
-  // load back buffer
-  src_ptr = back_buffer + thread * Ns * Nc;
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_local[i] += src_local[i];
-  }
+//   // load back buffer
+//   src_ptr = back_buffer + thread * Ns * Nc;
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     src_local[i] = src_ptr[i];
+//   }
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     dst_local[i] += src_local[i];
+//   }
 
-  // front
-  p = Point(x, y, z, Lt-1, parity);
-  dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
+//   // front
+//   p = Point(x, y, z, Lt-1, parity);
+//   dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
 
-  loadGauge(u_local, gauge, T_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
-  // loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
+//   loadGauge(u_local, gauge, T_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
+//   // loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 
-  src_ptr = front_buffer + thread * Ns * Nc;//((z * Ly + y) * sub_Lx + x) * Ns * Nc;
+//   src_ptr = front_buffer + thread * Ns * Nc;//((z * Ly + y) * sub_Lx + x) * Ns * Nc;
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    src_local[i] = src_ptr[i];
-  }
-  // save back result
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     src_local[i] = src_ptr[i];
+//   }
+//   // save back result
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     dst_ptr[i] = dst_local[i];
+//   }
 
-  for (int i = 0; i < Nc; i++) {
-    for (int j = 0; j < Nc; j++) {
-      // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
-      dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += -temp * dagger_flag_double;
-      // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
-      dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += -temp * dagger_flag_double;
-    }
-  }
-  // save front result
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
-}
+//   for (int i = 0; i < Nc; i++) {
+//     for (int j = 0; j < Nc; j++) {
+//       // first row vector with col vector
+//       temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+//       dst_local[0 * Nc + i] += temp;
+//       dst_local[2 * Nc + i] += -temp * dagger_flag_double;
+//       // second row vector with col vector
+//       temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+//       dst_local[1 * Nc + i] += temp;
+//       dst_local[3 * Nc + i] += -temp * dagger_flag_double;
+//     }
+//   }
+//   // save front result
+//   for (int i = 0; i < Ns * Nc; i++) {
+//     dst_ptr[i] = dst_local[i];
+//   }
+// }

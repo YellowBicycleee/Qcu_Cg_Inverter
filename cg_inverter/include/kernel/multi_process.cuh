@@ -53,8 +53,8 @@ __global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int L
 
   int new_even_odd = (z+t) & 0x01;
   Point p(sub_Lx-1, 2 * sub_y + (new_even_odd == 1-parity), z, t, 1-parity);
-
-  Complex* dst_ptr;
+  Point dst_p(0, sub_y, z, t, 0); // parity is useless
+  // Complex* dst_ptr;
 
   Complex src_local[Ns * Nc];
   Complex u_local[Nc * Nc];
@@ -64,7 +64,7 @@ __global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int L
   loadGauge(u_local, gauge, X_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
 
   // even save to even, odd save to even
-  dst_ptr = send_buffer + thread*Ns*Nc;
+  // dst_ptr = send_buffer + thread*Ns*Nc;  
 
   for (int i = 0; i < Ns * Nc; i++) {
     dst_local[i].clear2Zero();
@@ -85,9 +85,11 @@ __global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int L
     }
   }
 
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = dst_local[i];
-  }
+  // for (int i = 0; i < Ns * Nc; i++) {
+  //   dst_ptr[i] = dst_local[i];
+  // }
+  // x轴与其他轴不同
+  storeVector(dst_local, send_buffer, dst_p, 1, sub_Ly, Lz, Lt);
 }
 
 __global__ void DslashTransferBackX(void *fermion_in, int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer) {
@@ -101,16 +103,17 @@ __global__ void DslashTransferBackX(void *fermion_in, int Lx, int Ly, int Lz, in
 
   int new_even_odd = (z+t) & 0x01;
   Point p(0, 2 * sub_y + (new_even_odd != 1-parity), z, t, 1-parity);
-
-  Complex* dst_ptr;
+  Point dst_p(0, sub_y, z, t, 0); // parity is useless
+  // Complex* dst_ptr;
   Complex src_local[Ns * Nc];
 
   loadVector(src_local, fermion_in, p, sub_Lx, Ly, Lz, Lt);
 
-  dst_ptr = send_buffer + thread * Ns * Nc;
-  for (int i = 0; i < Ns * Nc; i++) {
-    dst_ptr[i] = src_local[i];
-  }
+  // dst_ptr = send_buffer + thread * Ns * Nc;
+  // for (int i = 0; i < Ns * Nc; i++) {
+  //   dst_ptr[i] = src_local[i];
+  // }
+  storeVector(src_local, send_buffer, dst_p, 1, sub_Ly, Lz, Lt);
 }
 __global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {
   // 前传传结果
@@ -277,6 +280,9 @@ __global__ void DslashTransferBackT(void *fermion_in, int Lx, int Ly, int Lz, in
   storeVector(src_local, send_buffer, dst_p, sub_Lx, Ly, Lz, 1);
 }
 
+// ---separate line-----
+// after this is postDslash kernels
+
 __global__ void calculateBackBoundaryX(void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer) {
   int sub_Lx = (Lx >> 1);
   int sub_Ly = (Ly >> 1);
@@ -284,7 +290,7 @@ __global__ void calculateBackBoundaryX(void *fermion_out, int Lx, int Ly, int Lz
   int t = thread / (Lz * sub_Ly);
   int z = thread % (Lz * sub_Ly) / sub_Ly;
   int sub_y = thread % sub_Ly;
-  
+
   int new_even_odd = (z+t) & 0x01;  // %2
   Point p(0, 2 * sub_y + (new_even_odd != parity), z, t, parity);
 

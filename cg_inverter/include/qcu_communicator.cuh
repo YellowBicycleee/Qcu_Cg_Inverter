@@ -4,6 +4,10 @@
 #include "qcu_macro.cuh"
 #include "assert.h"
 #include <mpi.h>
+
+#define QCU_COALESCING
+
+extern void* qcu_gauge;
 class MPICommunicator {
 private:
   int Lx_;
@@ -75,6 +79,9 @@ public:
     calculateAdjacentProcess();
     // allocateGaugeBuffer();
     // prepareGauge();
+#ifdef QCU_COALESCING
+    gauge = static_cast<Complex*>(qcu_gauge);
+#endif
   }
   ~MPICommunicator() {
     // freeBuffer();
@@ -95,6 +102,9 @@ public:
     calculateAdjacentProcess();
     // allocateGaugeBuffer();
     // prepareGauge();
+#ifdef QCU_COALESCING
+    gauge = static_cast<Complex*>(qcu_gauge);
+#endif
   }
 
 

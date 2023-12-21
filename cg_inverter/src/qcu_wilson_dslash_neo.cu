@@ -84,6 +84,7 @@ static __device__ __forceinline__ void loadVectorCoalesced(Complex* src_local, v
     src_local[i] = *start_ptr;
     start_ptr += sub_vol;
   }
+  // reconstructSU3(u_local);
 }
 
 static __device__ __forceinline__ void storeVectorCoalesced(Complex* dst_local, void* fermion_out, const Point& p, int half_Lx, int Ly, int Lz, int Lt) {

@@ -4,9 +4,9 @@
 #include "qcu_complex_computation.cuh"
 #include "qcu.h"
 
-#define COALESCED
-#define DEBUG
-#ifdef COALESCED
+
+// #define DEBUG
+#ifdef QCU_COALESCING
 #include "kernel/multi_process_coalesce.cuh"
 #else 
 #include "kernel/multi_process.cuh"

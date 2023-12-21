@@ -13,10 +13,9 @@
 #include "qcu_communicator.cuh"
 #include "qcu_clover_dslash.cuh"
 #include "qcu_wilson_dslash_neo.cuh"
-#include "qcu_wilson_dslash.cuh"
+// #include "qcu_wilson_dslash.cuh"
 #include "qcu_shift_storage_complex.cuh"
-#include "qcu_wilson_dslash_new_new.cuh"
-// #include "qcu_co"
+
 #include <iostream>
 using std::cout;
 using std::endl;
@@ -73,7 +72,7 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // callWilsonDslash(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
   // callWilsonDslashFull(fermion_out, fermion_in, gauge, param, parity, 0);
 
-
+  callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
   // callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
   // calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);
@@ -84,7 +83,7 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
 
   // callCloverDslash(fermion_out, fermion_in, gauge, param, parity, 0); 
-  callCloverDslashCoalesced_full(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
+  // callCloverDslashCoalesced_full(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
 }
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
   fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);

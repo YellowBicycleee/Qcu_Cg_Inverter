@@ -505,6 +505,7 @@ static __device__ __forceinline__ void loadGaugeCoalesced(double* u_local, void*
     start_ptr += sub_vol * 2;
   }
   reconstructSU3(u_local);
+  
 }
 
 static __device__ __forceinline__ void loadVectorCoalesced(double* src_local, void* fermion_in, const Point& p, int half_Lx, int Ly, int Lz, int Lt) {

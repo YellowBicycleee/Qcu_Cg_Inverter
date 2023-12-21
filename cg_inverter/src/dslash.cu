@@ -72,7 +72,7 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // callWilsonDslash(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
   // callWilsonDslashFull(fermion_out, fermion_in, gauge, param, parity, 0);
 
-  callWilsonDslash(fermion_out, fermion_in, gauge, param, parity, 0);
+  callWilsonDslash(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
   // callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
   // calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);

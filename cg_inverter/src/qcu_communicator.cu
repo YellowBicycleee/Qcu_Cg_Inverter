@@ -483,9 +483,7 @@ void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
 
 void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag) {
   assert (dagger_flag == 0 || dagger_flag == 1);
-#ifdef DEBUG
-  printf("enter postDslash...\n");
-#endif
+
   Complex h_flag;
   Complex* d_flag_ptr;
 
@@ -525,11 +523,12 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
       MPI_Wait(&recv_front_req[i], &recv_front_status[i]);
       checkCudaErrors(cudaMemcpy(d_addr, h_addr, sizeof(Complex) * boundary_length, cudaMemcpyHostToDevice));
     }
-#ifdef DEBUG
-  printf("MPI_Wait line <%d > end...\n", __LINE__);
-#endif
 
+#ifdef QCU_COALESCING
+    void *args1[] = {&coalesced_gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &dagger_flag_double};
+#else
     void *args1[] = {&gauge_, &fermion_out, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_addr, &dagger_flag_double};
+#endif
     if (i == T_DIRECTION && grid_t > 1) {
       // recv from front
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryT, subGridDim, blockDim, args1));
@@ -543,11 +542,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
       // recv from front
       checkCudaErrors(cudaLaunchKernel((void *)calculateFrontBoundaryX, subGridDim, blockDim, args1));
     }
-#ifdef DEBUG
-  MPI_Barrier(MPI_COMM_WORLD);
-  checkCudaErrors(cudaDeviceSynchronize());
-  printf("rank %d, calc front boundary end...\n", process_rank);
-#endif
+
     if ((i == T_DIRECTION && grid_t > 1) ||
         (i == Z_DIRECTION && grid_z > 1) || 
         (i == Y_DIRECTION && grid_y > 1) ||
@@ -569,11 +564,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
     } else if (i == X_DIRECTION && grid_x > 1) {
       checkCudaErrors(cudaLaunchKernel((void *)calculateBackBoundaryX, subGridDim, blockDim, args2));
     }
-#ifdef DEBUG
-  MPI_Barrier(MPI_COMM_WORLD);
-  checkCudaErrors(cudaDeviceSynchronize());
-  printf("rank = %d, calc back boundary end...\n", process_rank);
-#endif
+
     if ((i == T_DIRECTION && grid_t > 1) ||
         (i == Z_DIRECTION && grid_z > 1) || 
         (i == Y_DIRECTION && grid_y > 1) ||
@@ -584,10 +575,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
   }
   // calc result
   checkCudaErrors(cudaFree(d_flag_ptr));
-#ifdef DEBUG
-  MPI_Barrier(MPI_COMM_WORLD);
-  printf("rank = %d, free d_flag_ptr...\n", process_rank);
-#endif
+
   for (int i = 0; i < Nd; i++) 
   {
     if ((i == T_DIRECTION && grid_t > 1) || 
@@ -601,9 +589,6 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
       MPI_Wait(&send_back_req[i], &send_back_status[i]);
     }
   }
-#ifdef DEBUG
-  printf("postDslash end...\n");
-#endif
 }
 
 
@@ -729,8 +714,11 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   // front
   h_front_addr = getHostSendBufferAddr(FRONT, direction);
   d_front_addr = getSendBufferAddr(FRONT, direction);
-
+#ifdef QCU_COALESCING
+  void *args1[] = {&coalesced_gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
+#else
   void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
+#endif
   if (direction == T_DIRECTION && grid_t > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontT, subGridDim, blockDim, args1));
   } else if (direction == Z_DIRECTION && grid_z > 1) {

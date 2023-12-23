@@ -586,3 +586,10 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
 //     dst_ptr[i] = dst_local[i];
 //   }
 // }
+
+
+// _dir means 0, 1, 2, 3 ---- XYZT
+template <int _dir>
+__global__ void preTransferBoundary (void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {
+  
+}

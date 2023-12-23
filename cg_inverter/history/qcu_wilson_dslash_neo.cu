@@ -448,6 +448,271 @@ void WilsonDslash::calculateDslashFull(double kappa, int dagger_flag) {
   printf("coalescing total time, with kappa: (without malloc free memcpy) : %.9lf sec, block size %d\n", double(duration) / 1e9, BLOCK_SIZE);
 }
 
+
+
+static __global__ void mpiDslashNaive(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, double flag_param) {
+  assert(parity == 0 || parity == 1);
+
+  Lx >>= 1;
+
+  int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  int t = thread_id / (Lz * Ly * Lx);
+  int z = thread_id % (Lz * Ly * Lx) / (Ly * Lx);
+  int y = thread_id % (Ly * Lx) / Lx;
+  int x = thread_id % Lx;
+
+  int coord_boundary;
+  double flag = flag_param;
+
+
+  Point p(x, y, z, t, parity);
+  Point move_point;
+  Complex u_local[Nc * Nc];   // for GPU
+  Complex src_local[Ns * Nc]; // for GPU
+  Complex dst_local[Ns * Nc]; // for GPU
+  // Complex temp;
+  Complex temp1;
+  Complex temp2;
+  int eo = (y+z+t) & 0x01;
+
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_local[i].clear2Zero();
+  }
+
+  // \mu = 1
+  loadGauge(u_local, gauge, X_DIRECTION, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 0, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  // x front    x == Lx-1 && parity != eo
+  coord_boundary = (grid_x > 1 && x == Lx-1 && parity != eo) ? Lx-1 : Lx;
+  if (x < coord_boundary) {
+
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[3 * Nc + i] += temp1.multipy_i() * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[2 * Nc + i] += temp2.multipy_i() * flag;
+    }
+#endif
+  }
+  // x back   x==0 && parity == eo
+  move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, X_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);;
+
+  coord_boundary = (grid_x > 1 && x==0 && parity == eo) ? 1 : 0;
+  if (x >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[3 * Nc + i] += temp1.multipy_minus_i() * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[2 * Nc + i] += temp2.multipy_minus_i() * flag;
+    }
+#endif
+  }
+
+  // \mu = 2
+  // y front
+  loadGauge(u_local, gauge, Y_DIRECTION, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 1, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_y > 1) ? Ly-1 : Ly;
+  if (y < coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] - src_local[2 * Nc + j] *  flag) * u_local[i * Nc + j];
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[3 * Nc + i] += temp1 * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[2 * Nc + i] += -temp2 * flag;
+    }
+#endif
+  }
+
+  // y back
+  move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, Y_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+
+  coord_boundary = (grid_y > 1) ? 1 : 0;
+  if (y >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[3 * Nc + i] += -temp1 * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[2 * Nc + i] += temp2 * flag;
+    }
+#endif
+  }
+
+  // \mu = 3
+  // z front
+  loadGauge(u_local, gauge, Z_DIRECTION, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  coord_boundary = (grid_z > 1) ? Lz-1 : Lz;
+  if (z < coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j].multipy_i() * flag) * u_local[i * Nc + j];
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[2 * Nc + i] += temp1.multipy_i() * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[3 * Nc + i] += temp2.multipy_minus_i() * flag;
+    }
+#endif
+  }
+
+  // z back
+  move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, Z_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_z > 1) ? 1 : 0;
+  if (z >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j].multipy_i() * flag) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j].multipy_i() * flag) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[2 * Nc + i] += temp1.multipy_minus_i() * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[3 * Nc + i] += temp2.multipy_i() * flag;
+    }
+#endif
+  }
+
+  // t: front
+  // loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, T_DIRECTION, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 3, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_t > 1) ? Lt-1 : Lt;
+  if (t < coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] - src_local[2 * Nc + j] * flag) * u_local[i * Nc + j];
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] - src_local[3 * Nc + j] * flag) * u_local[i * Nc + j];
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[2 * Nc + i] += -temp1 * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[3 * Nc + i] += -temp2 * flag;
+    }
+#endif
+  }
+  // t: back
+  move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, T_DIRECTION, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_t > 1) ? 1 : 0;
+  if (t >= coord_boundary) {
+#ifdef INCLUDE_COMPUTATION
+#pragma unroll
+    for (int i = 0; i < Nc; i++) {
+      temp1.clear2Zero();
+      temp2.clear2Zero();
+#pragma unroll
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp1 += (src_local[0 * Nc + j] + src_local[2 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+        // second row vector with col vector
+        temp2 += (src_local[1 * Nc + j] + src_local[3 * Nc + j] * flag) * u_local[j * Nc + i].conj(); // transpose and conj
+      }
+      dst_local[0 * Nc + i] += temp1;
+      dst_local[2 * Nc + i] += temp1 * flag;
+      dst_local[1 * Nc + i] += temp2;
+      dst_local[3 * Nc + i] += temp2 * flag;
+    }
+#endif
+  }
+
+  // store result
+  // storeVectorCoalesced(dst_local, fermion_out, p, Lx, Ly, Lz, Lt);
+  // store result
+  // storeVectorBySharedMemory(static_cast<void*>(shared_buffer), static_cast<Complex*>(fermion_out), dst_local);
+
+  Complex* dst_global = p.getPointVector(static_cast<Complex *>(fermion_out), Lx, Ly, Lz, Lt);
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_global[i] = dst_local[i];
+  }
+  
+}
+
 static __global__ void dslashNaiveKernel(void *gauge, void *fermion_in, \
                 void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, \
               int grid_x, int grid_y, int grid_z, int grid_t, double flag_param
@@ -599,7 +864,7 @@ void WilsonDslash::calculateDslashNaive(int invert_flag) {
   auto start = std::chrono::high_resolution_clock::now();
   void *args[] = {&dslashParam_->gauge, &dslashParam_->fermion_in, &dslashParam_->fermion_out, &Lx, &Ly, &Lz, &Lt, &parity, &grid_x, &grid_y, &grid_z, &grid_t, &flag};
 
-  checkCudaErrors(cudaLaunchKernel((void *)dslashNaiveKernel, gridDim, blockDim, args));
+  checkCudaErrors(cudaLaunchKernel((void *)mpiDslashNaive, gridDim, blockDim, args));
 
   checkCudaErrors(cudaDeviceSynchronize());
   // boundary calculate
@@ -673,4 +938,87 @@ void callWilsonDslashNaive(void *fermion_out, void *fermion_in, void *gauge, Qcu
   DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
   WilsonDslash dslash_solver(dslash_param);
   dslash_solver.calculateDslashNaive(invert_flag);
+}
+
+
+
+
+
+
+void WilsonDslash::dslashNaiveBenchmark(int dagger_flag) {
+  int Lx = dslashParam_->Lx;
+  int Ly = dslashParam_->Ly;
+  int Lz = dslashParam_->Lz;
+  int Lt = dslashParam_->Lt;
+  int parity = dslashParam_->parity;
+  double flag;
+  if (dagger_flag == 0) {
+    flag = 1.0;
+  } else {
+    flag = -1.0;
+  }
+
+  int space = Lx * Ly * Lz * Lt >> 1;
+  dim3 gridDim(space / BLOCK_SIZE);
+  dim3 blockDim(BLOCK_SIZE);
+
+  checkCudaErrors(cudaDeviceSynchronize());
+
+
+  void *args[] = {&dslashParam_->gauge, &dslashParam_->fermion_in, &dslashParam_->fermion_out, &Lx, &Ly, &Lz, &Lt, &parity, &grid_x, &grid_y, &grid_z, &grid_t, &flag};
+  auto start = std::chrono::high_resolution_clock::now();
+  for (int i = 0; i < 100; i++)
+    checkCudaErrors(cudaLaunchKernel((void *)mpiDslashNaive, gridDim, blockDim, args));
+
+  checkCudaErrors(cudaDeviceSynchronize());
+  // boundary calculate
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  printf("naive total time: (100 times without sync) : %.9lf sec, block size %d\n",\
+         double(duration) / 1e9, BLOCK_SIZE);
+
+  // template
+  start = std::chrono::high_resolution_clock::now();
+  for (int i = 0; i < 100; i++)
+    checkCudaErrors(cudaLaunchKernel((void *)dslashNaiveKernel, gridDim, blockDim, args));
+  checkCudaErrors(cudaDeviceSynchronize());
+  // boundary calculate
+  end = std::chrono::high_resolution_clock::now();
+  duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  printf("naive Template total time: (100 times without sync) : %.9lf sec, block size %d\n",\
+         double(duration) / 1e9, BLOCK_SIZE);
+
+
+  // with sync
+  start = std::chrono::high_resolution_clock::now();
+  for (int i = 0; i < 100; i++) {
+    checkCudaErrors(cudaLaunchKernel((void *)mpiDslashNaive, gridDim, blockDim, args));
+    checkCudaErrors(cudaDeviceSynchronize());
+  }
+  // boundary calculate
+  end = std::chrono::high_resolution_clock::now();
+  duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  printf("naive total time: (100 times with sync) : %.9lf sec, block size %d\n",\
+         double(duration) / 1e9, BLOCK_SIZE);
+
+
+  start = std::chrono::high_resolution_clock::now();
+  for (int i = 0; i < 100; i++) {
+    checkCudaErrors(cudaLaunchKernel((void *)dslashNaiveKernel, gridDim, blockDim, args));
+    checkCudaErrors(cudaDeviceSynchronize());
+  }
+  // boundary calculate
+  end = std::chrono::high_resolution_clock::now();
+  duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  printf("naive Template total time: (100 times with sync) : %.9lf sec, block size %d\n",\
+         double(duration) / 1e9, BLOCK_SIZE);
+}
+
+
+
+// Benchmark
+void callWilsonDslashBenchmark(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  WilsonDslash dslash_solver(dslash_param);
+  dslash_solver.dslashNaiveBenchmark(invert_flag);
 }

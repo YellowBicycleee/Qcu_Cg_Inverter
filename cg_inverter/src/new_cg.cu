@@ -619,6 +619,9 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   int vol = Lx * Ly * Lz * Lt;
   int half_vol = vol >> 1;
 
+#ifdef DEBUG
+  printf("begin func cg, begin .....\n");
+#endif
 
 
 #ifdef COALESCED_CG
@@ -698,11 +701,15 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
 
 
 
-
+#ifdef DEBUG
+  printf("memory allocated, begin .....\n");
+#endif
   // odd new_b
   generate_new_b_odd(temp_vec3, origin_odd_b, origin_even_b, temp_vec1, \
                     temp_vec2, temp_vec4, gauge, d_kappa, d_coeff, param, kappa);
-
+#ifdef DEBUG
+  printf("odd new_b generated, begin .....\n");
+#endif
   // odd dagger D new_b
   dagger_flag = 1;
   odd_matrix_mul_vector (new_b, temp_vec3, temp_vec1, temp_vec2, \

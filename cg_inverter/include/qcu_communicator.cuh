@@ -7,7 +7,7 @@
 
 #define QCU_COALESCING
 
-extern void* qcu_gauge;
+
 class MPICommunicator {
 private:
   int Lx_;
@@ -20,6 +20,7 @@ private:
   void* d_partial_result_buffer;
 
   Complex* gauge_;
+  Complex* coalesced_gauge_;
   Complex* fermion_in_;
   Complex* fermion_out_;
 
@@ -79,9 +80,6 @@ public:
     calculateAdjacentProcess();
     // allocateGaugeBuffer();
     // prepareGauge();
-#ifdef QCU_COALESCING
-    gauge = static_cast<Complex*>(qcu_gauge);
-#endif
   }
   ~MPICommunicator() {
     // freeBuffer();
@@ -102,9 +100,6 @@ public:
     calculateAdjacentProcess();
     // allocateGaugeBuffer();
     // prepareGauge();
-#ifdef QCU_COALESCING
-    gauge = static_cast<Complex*>(qcu_gauge);
-#endif
   }
 
 
@@ -193,4 +188,7 @@ public:
   // void gpu_vector_norm2(void* vector, void* temp_res, int vector_length, void* result);
   void interprocess_vector_norm(void* vector, void* temp_res, int vector_length, void* result);
   void sendVecBarrier(int direction);
+  inline void setCoalescedGauge(void *gauge) {
+    coalesced_gauge_ = static_cast<Complex*>(gauge);
+  }
 };

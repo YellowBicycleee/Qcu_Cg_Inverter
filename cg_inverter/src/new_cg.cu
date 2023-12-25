@@ -183,48 +183,25 @@ bool if_even_converge(void* current_x, void* current_b_buffer, void* target_b, \
   return (h_norm2 / h_norm1 < 7e-15); // which means converge
 }
 
-// current_b is temporary
-bool if_odd_converge(void* current_x, void* current_b_buffer, void* target_b, \
-                    void* temp_vec1, void* temp_vec2, void* temp_vec3, \
-                    void* gauge, void* d_kappa, void* d_coeff, \
-                    void* d_norm1, void* d_norm2, QcuParam *param, double kappa
+// new if converge function
+bool if_odd_converge(void* current_r, void* target_b, void* temp_vec, \
+                    int half_vol, double* d_r_norm, double* d_b_norm
 ) {
+  double h_r_norm;
+  double h_b_norm;
 
-  int Lx = param->lattice_size[0];
-  int Ly = param->lattice_size[1];
-  int Lz = param->lattice_size[2];
-  int Lt = param->lattice_size[3];
-  int vol = Lx * Ly * Lz * Lt;
-  int half_vol = vol >> 1;
+  mpi_comm->interprocess_vector_norm (current_r, temp_vec, half_vol, d_r_norm);
+  mpi_comm->interprocess_vector_norm (target_b, temp_vec, half_vol, d_b_norm);
 
-  Complex h_coeff;
-  double h_norm1; // norm(target_b)
-  double h_norm2; // norm(target_b - current_b)
+  qcuCudaMemcpy (&h_r_norm, d_r_norm, sizeof(double), cudaMemcpyDeviceToHost);
+  qcuCudaMemcpy (&h_b_norm, d_b_norm, sizeof(double), cudaMemcpyDeviceToHost);
 
-  full_odd_matrix_mul_vector (current_b_buffer, current_x, \
-                temp_vec1, temp_vec2, temp_vec3, gauge, d_kappa, param, kappa);
-
-  // gpu_vector_norm2 (target_b, temp_vec3, half_vol, d_norm1);
-  mpi_comm->interprocess_vector_norm (target_b, temp_vec3, half_vol, d_norm1);
-
-  qcuCudaMemcpy (temp_vec2, target_b, sizeof(Complex) * half_vol * Ns * Nc, \
-                cudaMemcpyDeviceToDevice);     // target_b -----> temp_vec2
-  h_coeff = Complex(-1, 0);
-  qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  mpi_comm->interprocess_saxpy_barrier(current_b_buffer, temp_vec2, d_coeff, \
-                half_vol); // temp_vec2 <--- target_b - current_b
-
-  // gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
-  mpi_comm->interprocess_vector_norm(temp_vec2, temp_vec3, half_vol, d_norm2);
-  qcuCudaMemcpy(&h_norm1, d_norm1, sizeof(double), cudaMemcpyDeviceToHost);
-  qcuCudaMemcpy(&h_norm2, d_norm2, sizeof(double), cudaMemcpyDeviceToHost);
 #ifdef DEBUG
-  // printf("difference %.64lf, \n h_norm1= %.64lf, \n h_norm2 = %.64lf\n", h_norm2 / h_norm1, h_norm1, h_norm2);
-  // printf("difference %g\n", h_norm2 / h_norm1);
-  printf("rank = %d, odd difference :norm = %g, h_norm2 = %g, h_norm1=%g\n", process_rank, h_norm2 / h_norm1, h_norm2, h_norm1);
+  printf("rank = %d, odd difference :norm = %g, \n\tr_norm = %g, \tb_norm = %g\n", process_rank, h_r_norm / h_b_norm, h_r_norm, h_b_norm);
 #endif
-  return (h_norm2 / h_norm1 < 1e-15); // which means converge
+  return (h_r_norm / h_b_norm < 1e-15); // which means converge
 }
+
 
 bool odd_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec, \
         void* temp_vec1, void* temp_vec2, void* temp_vec3, void* temp_vec4, void* temp_vec5, \
@@ -261,12 +238,6 @@ bool odd_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec,
 
   qcuCudaMemcpy(&numerator, d_numerator, sizeof(Complex), cudaMemcpyDeviceToHost);
   qcuCudaMemcpy(&denominator, d_denominator, sizeof(Complex), cudaMemcpyDeviceToHost);
-// #ifdef DEBUG
-//   printf(RED"");
-//   printf("numerator %lf %lf\n", numerator.real(), numerator.imag());
-//   printf("denominator %lf %lf\n", denominator.real(), denominator.imag());
-//   printf(CLR"");
-// #endif
 
   alpha = numerator / denominator;
   qcuCudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice);
@@ -279,11 +250,8 @@ bool odd_cg_iter(void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec,
   qcuCudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice);
   mpi_comm->interprocess_saxpy_barrier(temp_vec4, temp_vec1, d_alpha, half_vol); // temp_vec4 = Ap, r'=r'-\alpha Ap------>temp_vec1
 
-  if (if_odd_converge(iter_x_odd, temp_vec5, \
-                      target_b, temp_vec2, temp_vec3,\
-                      temp_vec4, gauge, d_kappa, d_coeff, \
-                      d_norm1, d_norm2, param, kappa)
-  ) { // donnot use temp_vec1 !!!!
+  // donnot use temp1, as it is used
+  if (if_odd_converge(resid_vec, target_b, temp_vec2, half_vol, static_cast<double*>(d_norm1), static_cast<double*>(d_norm2))) {
     return true;
   }
 
@@ -400,65 +368,6 @@ bool even_solver (void* iter_x_even, void* target_b, void* temp_vec, QcuParam *p
   return true;
 }
 
-// cg_even
-bool even_cg_inverter (void* iter_x_even, void* target_b, void* resid_vec, void* p_vec,
-  void* temp_vec1, void* temp_vec2, void* temp_vec3, void* temp_vec4, void* temp_vec5,\
-  void* gauge, QcuParam *param, double kappa, void* d_kappa, \
-  void* d_alpha, void* d_beta, void* d_denominator, void* d_numerator, void* d_coeff, void* d_norm1, void* d_norm2
-) {
-
-  int Lx = param->lattice_size[0];
-  int Ly = param->lattice_size[1];
-  int Lz = param->lattice_size[2];
-  int Lt = param->lattice_size[3];
-  int vol = Lx * Ly * Lz * Lt;
-  int half_vol = vol >> 1;
-
-  int parity;
-  bool if_converge = false;
-  Complex h_coeff;
-
-  clear_vector (iter_x_even, half_vol * Ns * Nc);  // x <-- 0
-  // checkCudaErrors(cudaMemset(iter_x_even, 0, sizeof(double) * 2 * half_vol * Ns * Nc));
-  // b - Ax --->r
-  qcuCudaMemcpy (resid_vec, target_b, sizeof(Complex) * half_vol * Ns * Nc, \
-                cudaMemcpyDeviceToDevice);      // r <-- b
-
-  parity = 0;
-  qcuCudaMemcpy (temp_vec1, iter_x_even, sizeof(Complex) * half_vol * Ns * Nc, \
-                cudaMemcpyDeviceToDevice);  // x-->temp_vec1
-  cloverVectorHalfFuntion (temp_vec1, nullptr, gauge, param, parity);  // Ax ---> temp_vec1
-
-  h_coeff = Complex(-1, 0);
-  qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  mpi_comm->interprocess_saxpy_barrier(temp_vec1, resid_vec, d_coeff, \
-                                        half_vol);  // last: r <-- b-Ax
-
-  if_converge =  if_even_converge(iter_x_even, temp_vec5, target_b, temp_vec1, \
-                                  temp_vec2, temp_vec3, gauge, d_kappa, d_coeff, \
-                                  d_norm1, d_norm2, param, kappa);
-  if (if_converge) {
-    return if_converge;
-  }
-  // then   r--->p
-  qcuCudaMemcpy(p_vec, resid_vec, sizeof(Complex) * half_vol * Ns * Nc, \
-                cudaMemcpyDeviceToDevice);
-
-
-  for (int i = 0; i < half_vol; i++) {
-    if_converge = even_cg_iter(iter_x_even, target_b, resid_vec, p_vec, \
-                          temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
-                          gauge, param, kappa, d_kappa, d_alpha, d_beta, \
-                          d_denominator, d_numerator, d_coeff, d_norm1, d_norm2);
-    if (if_converge) {
-      printf("even cg success! %d iterations\n", i+1);
-      break;
-    }
-  }
-
-  return if_converge;
-}
-
 
 // cg_odd
 bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p_vec, \
@@ -493,9 +402,9 @@ bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p
 
 
   // If converge return x
-  if (if_odd_converge(iter_x_odd, temp_vec4, target_b, temp_vec1, temp_vec2, temp_vec3, gauge, d_kappa, d_coeff, d_norm1, d_norm2, param, kappa)) {
+  converge = if_odd_converge(resid_vec, target_b, temp_vec1, half_vol, static_cast<double*>(d_norm1), static_cast<double*>(d_norm2));
+  if (converge) {
     printf("cg suceess!\n");
-    // goto odd_cg_end;
     return converge;
   }
 
@@ -513,15 +422,6 @@ bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p
     printf(CLR"");
 #endif
 
-
-  // test inner prod
-// #ifdef DEBUG
-//   Complex temp;
-//   mpi_comm->interprocess_inner_prod_barrier(target_b, target_b, temp_vec5, half_vol);
-//   qcuCudaMemcpy(&temp, temp_vec5, sizeof(Complex), cudaMemcpyDeviceToHost);
-//   printf(BLUE"temp.real = %lf, temp.imag = %lf\n", temp.real(), temp.imag());
-//   printf(CLR"");
-// #endif
 
     converge = odd_cg_iter(iter_x_odd, target_b, resid_vec, p_vec, \
                           temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
@@ -699,17 +599,10 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
 
   qcuCudaMalloc(&new_b, sizeof(Complex) * half_vol * Ns * Nc);
 
-
-
-#ifdef DEBUG
-  printf("memory allocated, begin .....\n");
-#endif
   // odd new_b
   generate_new_b_odd(temp_vec3, origin_odd_b, origin_even_b, temp_vec1, \
                     temp_vec2, temp_vec4, gauge, d_kappa, d_coeff, param, kappa);
-#ifdef DEBUG
-  printf("odd new_b generated, begin .....\n");
-#endif
+
   // odd dagger D new_b
   dagger_flag = 1;
   odd_matrix_mul_vector (new_b, temp_vec3, temp_vec1, temp_vec2, \
@@ -729,12 +622,6 @@ void cg_inverter(void* b_vector, void* x_vector, void *gauge, QcuParam *param) {
   // even b
   generate_new_b_even (new_b, origin_even_b, odd_x,
                             gauge, d_kappa, d_coeff, param, kappa);
-  // TODO:
-  // if_end = even_cg_inverter (even_x, new_b, resid_vec, p_vec, \
-  //                           temp_vec1, temp_vec2, temp_vec3, temp_vec4, temp_vec5, \
-  //                           gauge, param, kappa, d_kappa, d_alpha, d_beta, \
-  //                           d_denominator, d_numerator, d_coeff, d_norm1, d_norm2
-  // );
 
   if_end = even_solver(even_x, new_b, temp_vec1, param);
   if (!if_end) {

@@ -221,7 +221,7 @@ __global__ void DslashTransferBackZ(void *fermion_in, int Lx, int Ly, int Lz, in
   Complex src_local[Ns * Nc];
 
   loadVector(src_local, fermion_in, p, sub_Lx, Ly, Lz, Lt);
-  storeVector(src_local, send_buffer, dst_p, sub_Lx, 1, Lz, Lt);
+  storeVector(src_local, send_buffer, dst_p, sub_Lx, Ly, 1, Lt);
 }
 
 // DslashTransferFrontT: Done

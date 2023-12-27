@@ -223,7 +223,7 @@ __global__ void DslashTransferBackZ(void *fermion_in, int Lx, int Ly, int Lz, in
   Complex src_local[Ns * Nc];
 
   loadVector(src_local, fermion_in, p, sub_Lx, Ly, Lz, Lt);
-  storeVector(src_local, send_buffer, dst_p, sub_Lx, 1, Lz, Lt);
+  storeVector(src_local, send_buffer, dst_p, sub_Lx, Ly, 1, Lt);
 }
 
 // DslashTransferFrontT: Done
@@ -519,73 +519,6 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
 
   storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
-
-
-// // combine front and back : T
-// __global__ void calculateBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* back_buffer, Complex* front_buffer, double dagger_flag_double) {
-//   // back
-//   int sub_Lx = (Lx >> 1);
-//   int thread = blockIdx.x * blockDim.x + threadIdx.x;
-//   int z = thread / (Ly * sub_Lx);
-//   int y = thread % (Ly * sub_Lx) / sub_Lx;
-//   int x = thread % sub_Lx;
-
-//   Point p;
-//   Complex* src_ptr;
-//   Complex* dst_ptr;
-//   Complex src_local[Ns * Nc];
-//   Complex dst_local[Ns * Nc];
-//   Complex u_local[Nc * Nc];
-//   Complex temp;
-
-//   p = Point(x, y, z, 0, parity);
-
-//   dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
-//   loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-
-//   // load back buffer
-//   src_ptr = back_buffer + thread * Ns * Nc;
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     src_local[i] = src_ptr[i];
-//   }
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     dst_local[i] += src_local[i];
-//   }
-
-//   // front
-//   p = Point(x, y, z, Lt-1, parity);
-//   dst_ptr = p.getPointVector(static_cast<Complex*>(fermion_out), sub_Lx, Ly, Lz, Lt);
-
-//   loadGauge(u_local, gauge, T_DIRECTION, p, sub_Lx, Ly, Lz, Lt);
-//   // loadVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
-
-//   src_ptr = front_buffer + thread * Ns * Nc;//((z * Ly + y) * sub_Lx + x) * Ns * Nc;
-
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     src_local[i] = src_ptr[i];
-//   }
-//   // save back result
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     dst_ptr[i] = dst_local[i];
-//   }
-
-//   for (int i = 0; i < Nc; i++) {
-//     for (int j = 0; j < Nc; j++) {
-//       // first row vector with col vector
-//       temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
-//       dst_local[0 * Nc + i] += temp;
-//       dst_local[2 * Nc + i] += -temp * dagger_flag_double;
-//       // second row vector with col vector
-//       temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
-//       dst_local[1 * Nc + i] += temp;
-//       dst_local[3 * Nc + i] += -temp * dagger_flag_double;
-//     }
-//   }
-//   // save front result
-//   for (int i = 0; i < Ns * Nc; i++) {
-//     dst_ptr[i] = dst_local[i];
-//   }
-// }
 
 
 // _dir means 0, 1, 2, 3 ---- XYZT

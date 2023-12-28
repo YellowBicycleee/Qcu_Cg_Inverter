@@ -8,14 +8,14 @@
 #define CLR "\033[0m"
 #define L_RED                 "\e[1;31m"  
 #define Nc 3
-#define Nd 4
+// #define Nd 4
 #define Ns 4
 
 
-#define X_DIRECTION 0
-#define Y_DIRECTION 1
-#define Z_DIRECTION 2
-#define T_DIRECTION 3
+// #define X_DIRECTION 0
+// #define Y_DIRECTION 1
+// #define Z_DIRECTION 2
+// #define T_DIRECTION 3
 
 #define FRONT 1
 #define BACK 0
@@ -24,6 +24,20 @@
 #define BLOCK_SIZE 256
 #define MAX_BLOCK_SIZE 256
 #define WARP_SIZE 32
+
+enum QcuDirection {
+  X_DIRECTION,    // 0
+  Y_DIRECTION,    // 1
+  Z_DIRECTION,    // 2
+  T_DIRECTION,    // 3
+  Nd
+};
+
+
+enum QcuStorage {
+  QCU_NAIVE,        // 0
+  QCU_COALESCING    // 1
+};
 
 
 #define checkCudaErrors(err) \

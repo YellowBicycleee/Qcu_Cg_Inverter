@@ -25,6 +25,7 @@ using std::endl;
 
 
 void* qcu_gauge;
+extern MPICommunicator* mpi_comm;
 void loadQcuGauge(void* gauge, QcuParam *param) {
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
@@ -33,6 +34,7 @@ void loadQcuGauge(void* gauge, QcuParam *param) {
 
   checkCudaErrors(cudaMalloc(&qcu_gauge, sizeof(double) * Nd * Lx * Ly * Lz * Lt * (Nc-1) * Nc * 2));
   shiftGaugeStorageTwoDouble(qcu_gauge, gauge, TO_COALESCE, Lx, Ly, Lz, Lt);
+  mpi_comm->setCoalescedGauge(qcu_gauge);
 }
 
 
@@ -74,7 +76,8 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // callWilsonDslashFull(fermion_out, fermion_in, gauge, param, parity, 0);
 
   // callWilsonDslash(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
-  callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
+  // callCloverDslash(fermion_out, fermion_in, gauge, param, parity, 0);
+  // callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag);
   // callWilsonDslashBenchmark(fermion_out, fermion_in, gauge, param, parity, 0);
   // callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
@@ -86,7 +89,7 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
 
   // callCloverDslash(fermion_out, fermion_in, gauge, param, parity, 0); 
-  // callCloverDslashCoalesced_full(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
+  callCloverDslashCoalesced_full(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("cpp total time: (without malloc free memcpy) : %.9lf sec, block size %d\n", double(duration) / 1e9, BLOCK_SIZE);

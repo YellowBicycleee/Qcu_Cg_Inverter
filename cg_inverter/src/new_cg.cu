@@ -422,6 +422,7 @@ bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p
 #ifdef DEBUG
     printf(RED"iteration %d", i+1);
     printf(CLR"");
+    auto start = std::chrono::high_resolution_clock::now();
 #endif
 
     converge = odd_cg_iter(iter_x_odd, target_b, resid_vec, p_vec, \
@@ -433,9 +434,13 @@ bool odd_cg_inverter (void* iter_x_odd, void* target_b, void* resid_vec, void* p
       printf("odd cg success! %d iterations\n", i+1);
       break;
     }
+#ifdef DEBUG
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    printf("odd iteration 1 time total time : %.9lf sec\n", double(duration) / 1e9);
+#endif
   }
 
-// odd_cg_end:
   return converge;
 }
 

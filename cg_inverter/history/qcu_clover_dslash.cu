@@ -583,6 +583,211 @@ __attribute__((constructor)) void initialize() {
 }
 
 
+static __global__ void mpiDslash(void *gauge, void *fermion_in, void *fermion_out,int Lx, int Ly, int Lz, int Lt, int parity, int grid_x, int grid_y, int grid_z, int grid_t, void* flag_ptr) {
+  assert(parity == 0 || parity == 1);
+
+  __shared__ double shared_buffer[BLOCK_SIZE * Ns * Nc * 2];
+  Lx >>= 1;
+
+  int thread = blockIdx.x * blockDim.x + threadIdx.x;
+  int t = thread / (Lz * Ly * Lx);
+  int z = thread % (Lz * Ly * Lx) / (Ly * Lx);
+  int y = thread % (Ly * Lx) / Lx;
+  int x = thread % Lx;
+
+  int coord_boundary;
+  Complex flag = *(static_cast<Complex*>(flag_ptr));
+
+
+
+  Point p(x, y, z, t, parity);
+  Point move_point;
+  Complex u_local[Nc * Nc];   // for GPU
+  Complex src_local[Ns * Nc]; // for GPU
+  Complex dst_local[Ns * Nc]; // for GPU
+  Complex temp;
+  int eo = (y+z+t) & 0x01;
+
+  for (int i = 0; i < Ns * Nc; i++) {
+    dst_local[i].clear2Zero();
+  }
+
+  // \mu = 1
+  loadGauge(u_local, gauge, 0, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 0, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  // x front    x == Lx-1 && parity != eo
+  coord_boundary = (grid_x > 1 && x == Lx-1 && parity != eo) ? Lx-1 : Lx;
+  if (x < coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] - flag * src_local[3 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+        dst_local[0 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += temp * Complex(0, 1) * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] - flag * src_local[2 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+        dst_local[1 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += temp * Complex(0, 1) * flag;
+      }
+    }
+  }
+
+  // x back  x==0 && parity == eo
+  move_point = p.move(BACK, 0, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, 0, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  coord_boundary = (grid_x > 1 && x==0 && parity == eo) ? 1 : 0;
+  if (x >= coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] + flag * src_local[3 * Nc + j] * Complex(0, 1)) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[0 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += temp * Complex(0, -1) * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] + flag * src_local[2 * Nc + j] * Complex(0, 1)) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[1 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += temp * Complex(0, -1) * flag;
+      }
+    }
+  }
+
+  // \mu = 2
+  // y front
+  loadGauge(u_local, gauge, 1, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 1, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  coord_boundary = (grid_y > 1) ? Ly-1 : Ly;
+  if (y < coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] + flag * src_local[3 * Nc + j]) * u_local[i * Nc + j];
+        dst_local[0 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += temp * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] - flag * src_local[2 * Nc + j]) * u_local[i * Nc + j];
+        dst_local[1 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += -temp * flag;
+      }
+    }
+  }
+
+  // y back
+  move_point = p.move(BACK, 1, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, 1, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_y > 1) ? 1 : 0;
+  if (y >= coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] - flag * src_local[3 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[0 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += -temp * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] + flag * src_local[2 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[1 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += temp * flag;
+      }
+    }
+  }
+
+  // \mu = 3
+  // z front
+  loadGauge(u_local, gauge, 2, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 2, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+  coord_boundary = (grid_z > 1) ? Lz-1 : Lz;
+  if (z < coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] - flag * src_local[2 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+        dst_local[0 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += temp * Complex(0, 1) * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] + flag * src_local[3 * Nc + j] * Complex(0, 1)) * u_local[i * Nc + j];
+        dst_local[1 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += temp * Complex(0, -1) * flag;
+      }
+    }
+  }
+
+  // z back
+  move_point = p.move(BACK, 2, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, 2, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_z > 1) ? 1 : 0;
+  if (z >= coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] + flag * src_local[2 * Nc + j] * Complex(0, 1)) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[0 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += temp * Complex(0, -1) * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] - flag * src_local[3 * Nc + j] * Complex(0, 1)) *
+              u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[1 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += temp * Complex(0, 1) * flag;
+      }
+    }
+  }
+
+  // t: front
+  loadGauge(u_local, gauge, 3, p, Lx, Ly, Lz, Lt);
+  move_point = p.move(FRONT, 3, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_t > 1) ? Lt-1 : Lt;
+  if (t < coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] - flag * src_local[2 * Nc + j]) * u_local[i * Nc + j];
+        dst_local[0 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += -temp * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] - flag * src_local[3 * Nc + j]) * u_local[i * Nc + j];
+        dst_local[1 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += -temp * flag;
+      }
+    }
+  }
+  // t: back
+  move_point = p.move(BACK, 3, Lx, Ly, Lz, Lt);
+  loadGauge(u_local, gauge, 3, move_point, Lx, Ly, Lz, Lt);
+  loadVector(src_local, fermion_in, move_point, Lx, Ly, Lz, Lt);
+
+  coord_boundary = (grid_t > 1) ? 1 : 0;
+  if (t >= coord_boundary) {
+    for (int i = 0; i < Nc; i++) {
+      for (int j = 0; j < Nc; j++) {
+        // first row vector with col vector
+        temp = (src_local[0 * Nc + j] + flag * src_local[2 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[0 * Nc + i] += temp;
+        dst_local[2 * Nc + i] += temp * flag;
+        // second row vector with col vector
+        temp = (src_local[1 * Nc + j] + flag * src_local[3 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+        dst_local[1 * Nc + i] += temp;
+        dst_local[3 * Nc + i] += temp * flag;
+      }
+    }
+  }
+
+  // store result
+  storeVectorBySharedMemory(static_cast<void*>(shared_buffer), static_cast<Complex*>(fermion_out), dst_local);
+}
+
+
 
 
 CloverDslash::CloverDslash(DslashParam& param) : Dslash(param){
@@ -667,8 +872,49 @@ void CloverDslash::cloverResult(void* p_fermion_out, void* p_clover_matrix, int 
 
 
 
-void CloverDslash::calculateDslash(int dagger_flag) {}
 
+
+void CloverDslash::calculateDslash(int invert_flag) {
+  int Lx = dslashParam_->Lx;
+  int Ly = dslashParam_->Ly;
+  int Lz = dslashParam_->Lz;
+  int Lt = dslashParam_->Lt;
+  int parity = dslashParam_->parity;
+  Complex h_flag;
+  if (invert_flag == 0) {
+    h_flag = Complex(1, 0);
+    // h_flag = Complex(0, 0); //debug
+  } else {
+    h_flag = Complex(-1, 0);
+  }
+  Complex* d_flag;
+
+  checkCudaErrors(cudaMalloc(&d_flag, sizeof(Complex)));
+  checkCudaErrors(cudaMemcpy(d_flag, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
+
+  int space = Lx * Ly * Lz * Lt >> 1;
+  dim3 gridDim(space / BLOCK_SIZE);
+  dim3 blockDim(BLOCK_SIZE);
+
+  checkCudaErrors(cudaDeviceSynchronize());
+  // checkCudaErrors(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
+
+  mpi_comm->preDslash(dslashParam_->fermion_in, parity, invert_flag);
+
+  auto start = std::chrono::high_resolution_clock::now();
+  void *args[] = {&dslashParam_->gauge, &dslashParam_->fermion_in, &dslashParam_->fermion_out, &Lx, &Ly, &Lz, &Lt, &parity, &grid_x, &grid_y, &grid_z, &grid_t, &d_flag};
+
+  checkCudaErrors(cudaMemcpy(d_flag, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaLaunchKernel((void *)mpiDslash, gridDim, blockDim, args));
+  checkCudaErrors(cudaDeviceSynchronize());
+  // boundary calculate
+  mpi_comm->postDslash(dslashParam_->fermion_out, parity, invert_flag);
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  // printf("total time: (without malloc free memcpy) : %.9lf sec\n", double(duration) / 1e9);
+  inverseCloverResult(dslashParam_->fermion_out, invert_matrix, Lx, Ly, Lz, Lt, parity);
+  checkCudaErrors(cudaFree(d_flag));
+}
 
 
 
@@ -687,7 +933,7 @@ void cloverVectorHalf (void *fermion_out, void *fermion_in, void *gauge, QcuPara
 }
 
 
-void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity) {
+void invertCloverDslashHalf (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity){//, int dagger_flag) {
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
   int Lz = param->lattice_size[2];
@@ -714,6 +960,13 @@ void invertCloverDslash (void *fermion_out, void *fermion_in, void *gauge, QcuPa
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
     invertCloverDslashHalf (half_fermion_out, half_fermion_in, gauge, param, parity);//, dagger_flag);
   }
+}
+
+
+void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  CloverDslash dslash_solver(dslash_param);
+  dslash_solver.calculateDslash(dagger_flag);
 }
 
 
@@ -776,6 +1029,47 @@ void cloverDslashOneRound(void *fermion_out, void *fermion_in, void *gauge, QcuP
     void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
     callCloverDslash(half_fermion_out, half_fermion_in, gauge, param, parity, invert_flag);
   }
+}
+
+
+
+void newFullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag) {
+  double kappa = 0.125;
+  // A = (1 + T)     A_{-1} Dslash
+  cloverDslashOneRound(fermion_out, fermion_in, gauge, param, invert_flag);
+
+  int Lx = param->lattice_size[0];
+  int Ly = param->lattice_size[1];
+  int Lz = param->lattice_size[2];
+  int Lt = param->lattice_size[3];
+  int vol = Lx * Ly * Lz * Lt;
+  // int half_vol = vol / 2;
+
+  Complex h_kappa(kappa, 0);
+  Complex h_coeff(1, 0);
+  Complex* d_coeff;
+  Complex* d_kappa;
+  checkCudaErrors(cudaMalloc(&d_coeff, sizeof(Complex)));
+  checkCudaErrors(cudaMalloc(&d_kappa, sizeof(Complex)));
+
+  // h_kappa *= Complex(-1, 0);
+  h_kappa = h_kappa * Complex(-1, 0);
+
+  checkCudaErrors(cudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice));
+  mpi_comm->interprocess_sax_barrier(fermion_out, d_kappa, vol);    // -kappa * left
+  mpi_comm->interprocess_saxpy_barrier(fermion_in, fermion_out, d_coeff, vol);  // src + kappa * dst = dst    coeff=1
+
+  checkCudaErrors(cudaFree(d_coeff));
+  checkCudaErrors(cudaFree(d_kappa));
+
+}
+
+void MmV_one_round (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, void* temp) {
+  // fullCloverDslashOneRound(temp, fermion_in, gauge, param, 0); // Dslash vec
+  // fullCloverDslashOneRound(fermion_out, temp, gauge, param, 1); // Dslash^\dagger Dslash vec
+  newFullCloverDslashOneRound(temp, fermion_in, gauge, param, 0); // Dslash vec
+  newFullCloverDslashOneRound(fermion_out, temp, gauge, param, 1); // Dslash^\dagger Dslash vec
 }
 
 
@@ -927,17 +1221,55 @@ void callCloverDslashCoalesced_full(void *fermion_out, void *fermion_in, void *g
   shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
 }
 
-void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+void callCloverDslashCoalesced(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+  
+  // int Lx = param->lattice_size[0];
+  // int Ly = param->lattice_size[1];
+  // int Lz = param->lattice_size[2];
+  // int Lt = param->lattice_size[3];
+  // int vol = Lx * Ly * Lz * Lt;
 
+  // if (!memory_allocated) {
+  //   checkCudaErrors(cudaMalloc(&coalesced_fermion_in, sizeof(double) * vol / 2 * Ns * Nc * 2));
+  //   checkCudaErrors(cudaMalloc(&coalesced_fermion_out, sizeof(double) * vol / 2 * Ns * Nc * 2));
+  //   memory_allocated = true;
+  // }
 
-  callWilsonDslashCoalesce(fermion_out, fermion_in, gauge, param, parity,  dagger_flag);
+  // shiftVectorStorageTwoDouble(coalesced_fermion_in, fermion_in, TO_COALESCE, Lx, Ly, Lz, Lt);
+
+  // DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, qcu_gauge, param, parity);
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  WilsonDslash dslash_solver(dslash_param);
+  dslash_solver.calculateDslash(invert_flag);
 
   invertCloverDslashHalfCoalesced (coalesced_fermion_out, coalesced_fermion_in, gauge, param, parity);
+
+  // shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
 }
 
 
-void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag) {
+void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag) {
+  
+  // int Lx = param->lattice_size[0];
+  // int Ly = param->lattice_size[1];
+  // int Lz = param->lattice_size[2];
+  // int Lt = param->lattice_size[3];
+  // int vol = Lx * Ly * Lz * Lt;
 
-  callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, dagger_flag);
-  invertCloverDslashHalf (fermion_out, nullptr, gauge, param, parity);
+  // if (!memory_allocated) {
+  //   checkCudaErrors(cudaMalloc(&coalesced_fermion_in, sizeof(double) * vol / 2 * Ns * Nc * 2));
+  //   checkCudaErrors(cudaMalloc(&coalesced_fermion_out, sizeof(double) * vol / 2 * Ns * Nc * 2));
+  //   memory_allocated = true;
+  // }
+
+  // shiftVectorStorageTwoDouble(coalesced_fermion_in, fermion_in, TO_COALESCE, Lx, Ly, Lz, Lt);
+
+  // DslashParam dslash_param(coalesced_fermion_in, coalesced_fermion_out, qcu_gauge, param, parity);
+  DslashParam dslash_param(fermion_in, fermion_out, gauge, param, parity);
+  WilsonDslash dslash_solver(dslash_param);
+  dslash_solver.calculateDslash(invert_flag);
+
+  invertCloverDslashHalfCoalesced (coalesced_fermion_out, coalesced_fermion_in, gauge, param, parity);
+
+  // shiftVectorStorageTwoDouble(fermion_out, coalesced_fermion_out, TO_NON_COALESCE, Lx, Ly, Lz, Lt);
 }

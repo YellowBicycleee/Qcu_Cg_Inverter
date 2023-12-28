@@ -444,41 +444,29 @@ MPICommunicator *mpi_comm;
 
 
 void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
-#ifdef DEBUG
-  printf("enter preDslash...\n");
-#endif
+
   for (int i = 0; i < Nd; i++) {
     // calc Boundary and send Boundary
     prepareFrontBoundaryVector (fermion_in, i, parity, invert_flag);
   }
-#ifdef DEBUG
-  printf("prepareFrontBoundaryVector done...\n");
-#endif
+
   checkCudaErrors(cudaStreamSynchronize(NULL));
 
   // copy from host to device
   for (int i = 0; i < Nd; i++) {
     sendVecBarrier(i);
   }
-#ifdef DEBUG
-  printf("sendVecBarrier done...\n");
-#endif
 
   for (int i = 0; i < Nd; i++) {
     // recv Boundary
     recvBoundaryVector(i);
   }
-#ifdef DEBUG
-  printf("recvBoundaryVector done...\n");
-#endif
+
   checkCudaErrors(cudaStreamSynchronize(NULL));
   for (int i = 0; i < Nd; i++) {
     // recv Boundary
     sendBoundaryVector(i);
   }
-#ifdef DEBUG
-  printf("sendBoundaryVector done...\n");
-#endif
 }
 
 void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag) {
@@ -679,6 +667,7 @@ void MPICommunicator::sendVecBarrier(int direction) {
   }
 }
 
+// __device__ Complex d_flag_ptr;
 void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction, int parity, int invert_flag) { // add parameter  invert_flag,  0---->flag(1,0)  1--->flag(-1, 0)
   assert (invert_flag == 0 || invert_flag == 1);
 
@@ -693,26 +682,26 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   }
   checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
-  Complex* h_front_addr;
-  Complex* h_back_addr;
+  // Complex* h_front_addr;
+  // Complex* h_back_addr;
   Complex* d_front_addr;
   Complex* d_back_addr;
 
   // int dst_process;
   int length[Nd] = {Lx_, Ly_, Lz_, Lt_};
   length[direction] = 1;
-  int boundary_length = 1;
+  // int boundary_length = 1;
   int sub_vol = 1;
   for (int i = 0; i < Nd; i++) {
     sub_vol *= length[i];
   }
   sub_vol >>= 1;  // div 2
-  boundary_length = sub_vol * (Ns * Nc);
+  // boundary_length = sub_vol * (Ns * Nc);
   dim3 subGridDim(sub_vol / BLOCK_SIZE);
   dim3 blockDim(BLOCK_SIZE);
 
   // front
-  h_front_addr = getHostSendBufferAddr(FRONT, direction);
+  // h_front_addr = getHostSendBufferAddr(FRONT, direction);
   d_front_addr = getSendBufferAddr(FRONT, direction);
 #ifdef QCU_COALESCING
   void *args1[] = {&coalesced_gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
@@ -728,9 +717,9 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   } else if (direction == X_DIRECTION && grid_x > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontX, subGridDim, blockDim, args1));
   }
-
+  checkCudaErrors(cudaDeviceSynchronize());
   // back
-  h_back_addr = getHostSendBufferAddr(BACK, direction);
+  // h_back_addr = getHostSendBufferAddr(BACK, direction);
   d_back_addr = getSendBufferAddr(BACK, direction);
 
   void *args2[] = {&fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_back_addr};
@@ -744,6 +733,7 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackX, subGridDim, blockDim, args2));
   }
 
+  checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaFree(d_flag_ptr));
 }
 

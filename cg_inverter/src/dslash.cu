@@ -79,7 +79,8 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // callCloverDslash(fermion_out, fermion_in, gauge, param, parity, 0);
   // callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag);
   // callWilsonDslashBenchmark(fermion_out, fermion_in, gauge, param, parity, 0);
-  // callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
+  //callWilsonDslashNaive(fermion_out, fermion_in, gauge, param, parity, 0);
+  callWilsonDslash(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
   // callNop(fermion_out, fermion_in, gauge, param, parity, 0);
   // calculateNaiveOnlyMemoryAccessing(fermion_out, fermion_in, gauge, param, parity, 0);
   // callNewDslash(fermion_out, fermion_in, gauge, param, parity, 0);
@@ -89,11 +90,13 @@ void dslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param
   // void callCloverDslash(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int invert_flag);
 
   // callCloverDslash(fermion_out, fermion_in, gauge, param, parity, 0); 
-  callCloverDslashCoalesced_full(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
+  // callCloverDslashCoalesced_full(fermion_out, fermion_in, qcu_gauge, param, parity, 0);
   auto end = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("cpp total time: (without malloc free memcpy) : %.9lf sec, block size %d\n", double(duration) / 1e9, BLOCK_SIZE);
 }
 void fullDslashQcu(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
-  fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);
+//  fullCloverDslashOneRound (fermion_out, fermion_in, gauge, param, dagger_flag);
+  fullWilsonDslashOneRound(fermion_out, fermion_in, gauge, param, dagger_flag);
+
 }

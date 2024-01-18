@@ -17,3 +17,5 @@ void callWilsonDslashCoalesce(void *fermion_out, void *fermion_in, void *gauge, 
 
 void callWilsonDslashFull(void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int parity, int dagger_flag);
 
+
+void fullWilsonDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int invert_flag);

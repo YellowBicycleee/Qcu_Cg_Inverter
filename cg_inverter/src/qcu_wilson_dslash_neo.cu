@@ -529,3 +529,44 @@ void callWilsonDslashNaive(void *fermion_out, void *fermion_in, void *gauge, Qcu
   WilsonDslash dslash_solver(dslash_param);
   dslash_solver.calculateDslashNaive(invert_flag);
 }
+
+
+
+void fullWilsonDslashOneRound (void *fermion_out, void *fermion_in, void *gauge, QcuParam *param, int dagger_flag) {
+  double kappa = 0.125;
+
+  int lx = param->lattice_size[0];
+  int ly = param->lattice_size[1];
+  int lz = param->lattice_size[2];
+  int lt = param->lattice_size[3];
+  int vol = lx * ly * lz * lt;
+  int half_vol = vol / 2;
+
+  for (int parity = 0; parity < 2; parity++) {
+    void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);
+    void* half_fermion_out = static_cast<void*>(static_cast<Complex*>(fermion_out) + parity * half_vol * Ns * Nc);
+
+    callWilsonDslashNaive(half_fermion_out, half_fermion_in, gauge, param, parity, dagger_flag);
+    // DslashParam dslash_param(half_fermion_in, half_fermion_out, gauge, param, parity);
+    // WilsonDslash dslash_solver(dslash_param);
+    // dslash_solver.calculateDslashNaive(dagger_flag);
+  }
+  Complex h_kappa(kappa, 0);
+  Complex h_coeff(1, 0);
+  Complex* d_coeff;
+  Complex* d_kappa;
+  checkCudaErrors(cudaMalloc(&d_coeff, sizeof(Complex)));
+  checkCudaErrors(cudaMalloc(&d_kappa, sizeof(Complex)));
+
+  // h_kappa *= complex(-1, 0);
+  h_kappa = h_kappa * Complex(-1, 0);
+
+  checkCudaErrors(cudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice));
+  mpi_comm->interprocess_sax_barrier(fermion_out, d_kappa, vol);    // -kappa * left
+  mpi_comm->interprocess_saxpy_barrier(fermion_in, fermion_out, d_coeff, vol);  // src + kappa * dst = dst    coeff=1
+
+
+  checkCudaErrors(cudaFree(d_coeff));
+  checkCudaErrors(cudaFree(d_kappa));
+}

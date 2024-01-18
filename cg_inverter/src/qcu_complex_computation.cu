@@ -12,10 +12,14 @@ static __global__ void sclar_multiply_vector_gpu (void* x, void* a, int vol) {
   int pos = blockIdx.x * blockDim.x + threadIdx.x;  // thread pos in total
   Complex scalar = *(static_cast<Complex*>(a));
 
-  Complex* x_dst = static_cast<Complex*>(x) + pos * Ns * Nc;
+  // Complex* x_dst = static_cast<Complex*>(x) + pos * Ns * Nc;
 
+  // for (int i = 0; i < Ns * Nc; i++) {
+  //   x_dst[i] = scalar * x_dst[i];
+  // }
+  Complex* x_dst = static_cast<Complex*>(x) + pos;
   for (int i = 0; i < Ns * Nc; i++) {
-    x_dst[i] = scalar * x_dst[i];
+    *(x_dst + i * vol) = *(x_dst + i * vol) * scalar;
   }
 }
 
@@ -26,17 +30,22 @@ static __global__ void saxpy_gpu (void* y, void* x, void* a, int vol) {
   int pos = blockIdx.x * blockDim.x + threadIdx.x;  // thread pos in total
   Complex scalar = *(static_cast<Complex*>(a));
 
-  Complex* y_dst = static_cast<Complex*>(y) + pos * Ns * Nc;
-  Complex* x_dst = static_cast<Complex*>(x) + pos * Ns * Nc;
+  //Complex* y_dst = static_cast<Complex*>(y) + pos * Ns * Nc;
+  //Complex* x_dst = static_cast<Complex*>(x) + pos * Ns * Nc;
 
-// #ifdef DEBUG
-//   if (pos == 0) {
-//     printf("before real = %lf, imag = %lf\nafter real = %lf imag = %lf\n", y_dst[0].real(), y_dst[0].imag(), (y_dst[0] + x_dst[0] * scalar).real(), (y_dst[0] + x_dst[0] * scalar).imag());
-//   }
-// #endif
+  // for (int i = 0; i < Ns * Nc; i++) {
+  //   y_dst[i] += x_dst[i] * scalar;
+  // }
+  Complex* y_dst = static_cast<Complex*>(y) + pos;
+  Complex* x_dst = static_cast<Complex*>(x) + pos;
 
+  Complex local_y;
+  Complex local_x;
   for (int i = 0; i < Ns * Nc; i++) {
-    y_dst[i] += x_dst[i] * scalar;
+    local_y = *(y_dst + i * vol);
+    local_x = *(x_dst + i * vol);
+    local_y += local_x * scalar;
+    *(y_dst + i * vol) = local_y;
   }
 }
 

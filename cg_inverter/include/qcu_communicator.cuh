@@ -175,10 +175,10 @@ public:
   
   void calculateAdjacentProcess();
 
-  void interprocess_saxpy_barrier(void* x, void* y, void* scalar, int vol);
+  void interprocess_saxpy_barrier(void* x, void* y, const Complex& scalar, int vol);
   void interprocess_inner_prod_barrier(void* x, void* y, void* result, int vol);
   void interprocess_inner_prod(void* x, void* y, void* result, int vector_length);
-  void interprocess_sax_barrier (void* x, void* scalar, int vol);
+  void interprocess_sax_barrier (void* x, const Complex& scalar, int vol);
   void freeBuffer();
   void freeGaugeBuffer();
 

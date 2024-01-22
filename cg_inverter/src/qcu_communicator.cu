@@ -1070,13 +1070,13 @@ void MPICommunicator::freeGaugeBuffer () {
 
 
 // parameters on device!!!   ax+y ----> y
-void MPICommunicator::interprocess_saxpy_barrier(void* x, void* y, void* scalar, int vol) {
+void MPICommunicator::interprocess_saxpy_barrier(void* x, void* y, const Complex& scalar, int vol) {
   // int vol = Lx * Ly * Lz * Lt;
   gpu_saxpy(x, y, scalar, vol);
   MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void MPICommunicator::interprocess_sax_barrier (void* x, void* scalar, int vol) {
+void MPICommunicator::interprocess_sax_barrier (void* x, const Complex& scalar, int vol) {
   gpu_sclar_multiply_vector(x, scalar, vol);
   MPI_Barrier(MPI_COMM_WORLD);
 }

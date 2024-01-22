@@ -740,10 +740,10 @@ void fullCloverDslashOneRound (void *fermion_out, void *fermion_in, void *gauge,
   // h_kappa *= Complex(-1, 0);
   h_kappa = h_kappa * Complex(-1, 0);
 
-  checkCudaErrors(cudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice));
-  checkCudaErrors(cudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice));
-  mpi_comm->interprocess_sax_barrier(fermion_out, d_kappa, vol);    // -kappa * left
-  mpi_comm->interprocess_saxpy_barrier(fermion_in, fermion_out, d_coeff, vol);  // src + kappa * dst = dst    coeff=1
+  // checkCudaErrors(cudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice));
+  mpi_comm->interprocess_sax_barrier(fermion_out, h_kappa, vol);    // -kappa * left
+  mpi_comm->interprocess_saxpy_barrier(fermion_in, fermion_out, h_coeff, vol);  // src + kappa * dst = dst    coeff=1
 
   for (int parity = 0; parity < 2; parity++) {
     void* half_fermion_in = static_cast<void*>(static_cast<Complex*>(fermion_in) + (1 - parity) * half_vol * Ns * Nc);

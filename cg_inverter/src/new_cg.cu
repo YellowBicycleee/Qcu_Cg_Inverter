@@ -21,6 +21,7 @@ extern MPICommunicator *mpi_comm;
 extern void *qcu_gauge;
 extern int process_rank;
 
+static double max_prec = 7e-15;
 
 class TimerLog {
 private:
@@ -116,7 +117,7 @@ static void clear_vector(void *vec, int vector_length) {
  * @param kappa kappa (double)
  */
 void odd_matrix_mul_vector(void *output_Ax, void *input_x, void *temp_vec1,
-                           void *temp_vec2, void *gauge, void *d_kappa,
+                           void *temp_vec2, void *gauge, 
                            QcuParam *param, int dagger_flag, double kappa) {
 
   int Lx = param->lattice_size[0];
@@ -155,11 +156,11 @@ void odd_matrix_mul_vector(void *output_Ax, void *input_x, void *temp_vec1,
 
   h_coeff = Complex(-kappa * kappa, 0);
   // qcuCudaMemcpy(d_kappa, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_kappa, &h_coeff, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_kappa, &h_coeff, sizeof(Complex),
+                                  // cudaMemcpyHostToDevice));
   // saxpy
-  mpi_comm->interprocess_saxpy_barrier(temp_vec2, output_Ax, d_kappa,
-                                       half_vol); // coeff temp2 + x --->x
+  mpi_comm->interprocess_saxpy_barrier(temp_vec2, output_Ax, h_coeff,
+                                       half_vol); // kappa temp2 + x --->x
 }
 
 void full_odd_matrix_mul_vector(void *output_Ax, void *input_x, void *temp_vec1,
@@ -169,10 +170,10 @@ void full_odd_matrix_mul_vector(void *output_Ax, void *input_x, void *temp_vec1,
   int dagger_flag;
   dagger_flag = 0;
   odd_matrix_mul_vector(temp_vec3, input_x, temp_vec1, temp_vec2, gauge,
-                        d_kappa, param, dagger_flag, kappa);
+                        param, dagger_flag, kappa);
   dagger_flag = 1;
   odd_matrix_mul_vector(output_Ax, temp_vec3, temp_vec1, temp_vec2, gauge,
-                        d_kappa, param, dagger_flag, kappa);
+                        param, dagger_flag, kappa);
 }
 // current_b is temporary
 bool if_even_converge(void *current_x, void *current_b_buffer, void *target_b,
@@ -213,12 +214,15 @@ bool if_even_converge(void *current_x, void *current_b_buffer, void *target_b,
                       cudaMemcpyDeviceToDevice)); // target_b -----> temp_vec2
   h_coeff = Complex(-1, 0);
   // qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
+                                  // cudaMemcpyHostToDevice));
+  // mpi_comm->interprocess_saxpy_barrier(
+  //    current_b_buffer, temp_vec2, d_coeff,
+  //    half_vol); // temp_vec2 <--- target_b - current_b
   mpi_comm->interprocess_saxpy_barrier(
-      current_b_buffer, temp_vec2, d_coeff,
+      current_b_buffer, temp_vec2, h_coeff,
       half_vol); // temp_vec2 <--- target_b - current_b
-
+  
   // gpu_vector_norm2(temp_vec2, temp_vec3, half_vol, d_norm2);
   mpi_comm->interprocess_vector_norm(temp_vec2, temp_vec3, half_vol, d_norm2);
 
@@ -232,7 +236,7 @@ bool if_even_converge(void *current_x, void *current_b_buffer, void *target_b,
   printf("rank = %d, even difference :norm = %g, h_norm2 = %g, h_norm1=%g\n",
          process_rank, h_norm2 / h_norm1, h_norm2, h_norm1);
 #endif
-  return (h_norm2 / h_norm1 < 7e-15); // which means converge
+  return (h_norm2 / h_norm1 < max_prec); // which means converge
 }
 
 // new if converge function
@@ -251,7 +255,7 @@ bool if_odd_converge(void *current_r, void *target_b, void *temp_vec,
       "rank = %d, odd difference :norm = %g, \n\tr_norm = %g, \tb_norm = %g\n",
       process_rank, h_r_norm / h_b_norm, h_r_norm, h_b_norm);
 #endif
-  return (h_r_norm / h_b_norm < 1e-15); // which means converge
+  return (h_r_norm / h_b_norm < max_prec); // which means converge
 }
 
 bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
@@ -338,8 +342,8 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
 
   alpha = numerator / denominator;
   // qcuCudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
+                                  // cudaMemcpyHostToDevice));
 #ifdef DEBUG
   if (round == 2) {
     timer_log.getTime("3 memcpy and alpha calc ", __LINE__);
@@ -351,7 +355,9 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
     timer_log.setTimer();
   }
 #endif
-  mpi_comm->interprocess_saxpy_barrier(p_vec, iter_x_odd, d_alpha,
+  //mpi_comm->interprocess_saxpy_barrier(p_vec, iter_x_odd, d_alpha,
+  //                                     half_vol); // x = x + \alpha p
+  mpi_comm->interprocess_saxpy_barrier(p_vec, iter_x_odd, alpha,
                                        half_vol); // x = x + \alpha p
 #ifdef DEBUG
   if (round == 2) {
@@ -378,28 +384,30 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
   alpha = alpha * Complex(-1, 0);
   // qcuCudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice);
 
-#ifdef DEBUG
-  if (round == 2) {
-    timer_log.setTimer();
-  }
-#endif
-  checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
-#ifdef DEBUG
-  if (round == 2) {
-    timer_log.getTime("memcpyAsync ", __LINE__);
-  }
-#endif
+// #ifdef DEBUG
+//   if (round == 2) {
+//     timer_log.setTimer();
+//   }
+// #endif
+  // checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
+  //                                 cudaMemcpyHostToDevice));
+// #ifdef DEBUG
+//   if (round == 2) {
+//     timer_log.getTime("memcpyAsync ", __LINE__);
+//   }
+// #endif
 
 #ifdef DEBUG
   if (round == 2) {
     timer_log.setTimer();
   }
 #endif
+  // mpi_comm->interprocess_saxpy_barrier(
+  //     temp_vec4, temp_vec1, d_alpha,
+  //     half_vol); // temp_vec4 = Ap, r'=r'-\alpha Ap------>temp_vec1
   mpi_comm->interprocess_saxpy_barrier(
-      temp_vec4, temp_vec1, d_alpha,
+      temp_vec4, temp_vec1, alpha,
       half_vol); // temp_vec4 = Ap, r'=r'-\alpha Ap------>temp_vec1
-
 #ifdef DEBUG
   if (round == 2) {
     timer_log.getTime("saxpy ", __LINE__);
@@ -451,8 +459,8 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
                                   cudaMemcpyDeviceToHost));
   beta = denominator / numerator;
   // qcuCudaMemcpy(d_beta, &beta, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(
-      cudaMemcpyAsync(d_beta, &beta, sizeof(Complex), cudaMemcpyHostToDevice));
+  // checkCudaErrors(
+      // cudaMemcpyAsync(d_beta, &beta, sizeof(Complex), cudaMemcpyHostToDevice));
   // p = r' + \beta p
 #ifdef DEBUG
   if (round == 2) {
@@ -465,7 +473,8 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
     timer_log.setTimer();
   }
 #endif
-  gpu_sclar_multiply_vector(p_vec, d_beta, half_vol); // p_vec = \beta p_vec
+  // gpu_sclar_multiply_vector(p_vec, d_beta, half_vol); // p_vec = \beta p_vec
+  gpu_sclar_multiply_vector(p_vec, beta, half_vol); // p_vec = \beta p_vec
 #ifdef DEBUG
   if (round == 2) {
     timer_log.getTime("sax ", __LINE__);
@@ -474,19 +483,19 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
 
   one = Complex(1, 0);
 
-#ifdef DEBUG
-  if (round == 2) {
-    timer_log.setTimer();
-  }
-#endif
+// #ifdef DEBUG
+//   if (round == 2) {
+//     timer_log.setTimer();
+//   }
+// #endif
   // qcuCudaMemcpy(d_coeff, &one, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(
-      cudaMemcpyAsync(d_coeff, &one, sizeof(Complex), cudaMemcpyHostToDevice));
-#ifdef DEBUG
-  if (round == 2) {
-    timer_log.getTime("memcpyAsync ", __LINE__);
-  }
-#endif
+  // checkCudaErrors(
+      // cudaMemcpyAsync(d_coeff, &one, sizeof(Complex), cudaMemcpyHostToDevice));
+// #ifdef DEBUG
+//   if (round == 2) {
+//     timer_log.getTime("memcpyAsync ", __LINE__);
+//   }
+// #endif
 
 
 #ifdef DEBUG
@@ -494,7 +503,9 @@ bool odd_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec, void *p_vec,
     timer_log.setTimer();
   }
 #endif
-  mpi_comm->interprocess_saxpy_barrier(temp_vec1, p_vec, d_coeff,
+  // mpi_comm->interprocess_saxpy_barrier(temp_vec1, p_vec, d_coeff,
+  //                                      half_vol); // p <-- r' + \beta p
+  mpi_comm->interprocess_saxpy_barrier(temp_vec1, p_vec, one,
                                        half_vol); // p <-- r' + \beta p
 #ifdef DEBUG
   if (round == 2) {
@@ -569,10 +580,12 @@ bool even_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec,
 
   alpha = numerator / denominator;
   // qcuCudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
+  //                                 cudaMemcpyHostToDevice));
 
-  mpi_comm->interprocess_saxpy_barrier(p_vec, iter_x_odd, d_alpha,
+  // mpi_comm->interprocess_saxpy_barrier(p_vec, iter_x_odd, d_alpha,
+  //                                      half_vol); // x = x + \alpha p
+  mpi_comm->interprocess_saxpy_barrier(p_vec, iter_x_odd, alpha,
                                        half_vol); // x = x + \alpha p
 
   // qcuCudaMemcpy(temp_vec1, resid_vec, sizeof(Complex) * half_vol * Ns * Nc,
@@ -583,10 +596,13 @@ bool even_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec,
 
   alpha = alpha * Complex(-1, 0);
   // qcuCudaMemcpy(d_alpha, &alpha, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_alpha, &alpha, sizeof(Complex),
+  //                                 cudaMemcpyHostToDevice));
+  // mpi_comm->interprocess_saxpy_barrier(
+  //     temp_vec4, temp_vec1, d_alpha,
+  //     half_vol); // temp_vec4 = Ap, r'=r-\alpha Ap------>temp_vec1
   mpi_comm->interprocess_saxpy_barrier(
-      temp_vec4, temp_vec1, d_alpha,
+      temp_vec4, temp_vec1, alpha,
       half_vol); // temp_vec4 = Ap, r'=r-\alpha Ap------>temp_vec1
 
   if (if_even_converge(iter_x_odd, temp_vec5, target_b, temp_vec2, temp_vec3,
@@ -605,17 +621,19 @@ bool even_cg_iter(void *iter_x_odd, void *target_b, void *resid_vec,
                                   cudaMemcpyDeviceToHost));
   beta = denominator / numerator;
   // qcuCudaMemcpy(d_beta, &beta, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(
-      cudaMemcpyAsync(d_beta, &beta, sizeof(Complex), cudaMemcpyHostToDevice));
+  // checkCudaErrors(
+      // cudaMemcpyAsync(d_beta, &beta, sizeof(Complex), cudaMemcpyHostToDevice));
   // p = r' + \beta p
-  gpu_sclar_multiply_vector(p_vec, d_beta, half_vol); // p_vec = \beta p_vec
+  // gpu_sclar_multiply_vector(p_vec, d_beta, half_vol); // p_vec = \beta p_vec
+  gpu_sclar_multiply_vector(p_vec, beta, half_vol); // p_vec = \beta p_vec
   one = Complex(1, 0);
   // qcuCudaMemcpy(d_coeff, &one, sizeof(Complex), cudaMemcpyHostToDevice);
   checkCudaErrors(
       cudaMemcpyAsync(d_coeff, &one, sizeof(Complex), cudaMemcpyHostToDevice));
-  mpi_comm->interprocess_saxpy_barrier(temp_vec1, p_vec, d_coeff,
+  // mpi_comm->interprocess_saxpy_barrier(temp_vec1, p_vec, d_coeff,
+  //                                      half_vol); // p <-- r' + \beta p
+  mpi_comm->interprocess_saxpy_barrier(temp_vec1, p_vec, one,
                                        half_vol); // p <-- r' + \beta p
-
   // qcuCudaMemcpy(resid_vec, temp_vec1, sizeof(Complex) * half_vol * Ns * Nc,
   //               cudaMemcpyDeviceToDevice); // r <--- r'
   checkCudaErrors(cudaMemcpyAsync(resid_vec, temp_vec1,
@@ -682,9 +700,11 @@ bool odd_cg_inverter(void *iter_x_odd, void *target_b, void *resid_vec,
 
   h_coeff = Complex(-1, 0);
   // qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
-  mpi_comm->interprocess_saxpy_barrier(temp_vec4, resid_vec, d_coeff,
+  // checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
+  //                                 cudaMemcpyHostToDevice));
+  // mpi_comm->interprocess_saxpy_barrier(temp_vec4, resid_vec, d_coeff,
+  //                                      half_vol); // last: r <-- b-Ax
+  mpi_comm->interprocess_saxpy_barrier(temp_vec4, resid_vec, h_coeff,
                                        half_vol); // last: r <-- b-Ax
 
   // If converge return x
@@ -752,20 +772,22 @@ void generate_new_b_even(void *new_even_b, void *origin_even_b, void *res_odd_x,
   Complex h_kappa(kappa, 0);
   Complex h_coeff;
   // qcuCudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_kappa, &h_kappa, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_kappa, &h_kappa, sizeof(Complex),
+                                  // cudaMemcpyHostToDevice));
   // D_{eo}x_{o} ----> new_even_b
   wilsonDslashFunction(new_even_b, res_odd_x, gauge, param, parity,
                        dagger_flag);
   // kappa D_{eo}x_{o} ----> new_even_b
-  mpi_comm->interprocess_sax_barrier(new_even_b, d_kappa, half_vol);
+  mpi_comm->interprocess_sax_barrier(new_even_b, h_kappa, half_vol);
 
   h_coeff = Complex(1, 0);
   // qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
+  //                                 cudaMemcpyHostToDevice));
   // kappa D_{eo}x_{o} + even_b ----> new_even_b
-  mpi_comm->interprocess_saxpy_barrier(origin_even_b, new_even_b, d_coeff,
+  // mpi_comm->interprocess_saxpy_barrier(origin_even_b, new_even_b, d_coeff,
+  //                                      half_vol);
+  mpi_comm->interprocess_saxpy_barrier(origin_even_b, new_even_b, h_coeff,
                                        half_vol);
 }
 
@@ -809,19 +831,25 @@ void generate_new_b_odd(void *new_b, void *origin_odd_b, void *origin_even_b,
   // kappa D_{oe}A^{-1}_{ee}b_{e}
   h_kappa = Complex(kappa, 0);
   // qcuCudaMemcpy(d_kappa, &h_kappa, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_kappa, &h_kappa, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
-  mpi_comm->interprocess_sax_barrier(new_b, d_kappa, half_vol);
+  // checkCudaErrors(cudaMemcpyAsync(d_kappa, &h_kappa, sizeof(Complex),
+                                  // cudaMemcpyHostToDevice));
+  mpi_comm->interprocess_sax_barrier(new_b, h_kappa, half_vol);
 
   h_coeff = Complex(1, 0);
   // qcuCudaMemcpy(d_coeff, &h_coeff, sizeof(Complex), cudaMemcpyHostToDevice);
-  checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
-                                  cudaMemcpyHostToDevice));
-  mpi_comm->interprocess_saxpy_barrier(origin_odd_b, new_b, d_coeff, half_vol);
+  // checkCudaErrors(cudaMemcpyAsync(d_coeff, &h_coeff, sizeof(Complex),
+                                  // cudaMemcpyHostToDevice));
+  // mpi_comm->interprocess_saxpy_barrier(origin_odd_b, new_b, d_coeff, half_vol);
+  mpi_comm->interprocess_saxpy_barrier(origin_odd_b, new_b, h_coeff, half_vol);
 }
 
-void cg_inverter(void *b_vector, void *x_vector, void *gauge, QcuParam *param) {
-  double kappa = 0.125;
+
+
+
+void cg_inverter(void *x_vector, void *b_vector, void *gauge, QcuParam *param, double p_max_prec = 7e-15, double p_kappa = 0.125) {
+  max_prec = p_max_prec;
+
+  double kappa = p_kappa;
 
   int Lx = param->lattice_size[0];
   int Ly = param->lattice_size[1];
@@ -922,7 +950,7 @@ void cg_inverter(void *b_vector, void *x_vector, void *gauge, QcuParam *param) {
 
   // odd dagger D new_b
   dagger_flag = 1;
-  odd_matrix_mul_vector(new_b, temp_vec3, temp_vec1, temp_vec2, gauge, d_kappa,
+  odd_matrix_mul_vector(new_b, temp_vec3, temp_vec1, temp_vec2, gauge, 
                         param, dagger_flag, kappa);
 
   mpi_comm->interprocess_vector_norm(new_b, temp_vec1, half_vol, d_norm_b);
@@ -988,3 +1016,7 @@ cg_end:
   qcuCudaFree(coalesced_x_vector);
 #endif
 }
+
+// void cg_inverter(void *x_vector, void *b_vector, void *gauge, QcuParam *param, double p_max_prec = 7e-15, double p_kappa = 0.125) {
+  // cg_inverter_impl(void *b_vector, void *x_vector, void *gauge, QcuParam *param, double p_max_prec = 7e-15, double p_kappa = 0.125)
+// }

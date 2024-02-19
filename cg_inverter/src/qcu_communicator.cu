@@ -449,8 +449,9 @@ void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
     // calc Boundary and send Boundary
     prepareFrontBoundaryVector (fermion_in, i, parity, invert_flag);
   }
-
-  checkCudaErrors(cudaStreamSynchronize(NULL));
+  if (grid_x > 1 || grid_y > 1 || grid_z > 1 || grid_t > 1) {
+    checkCudaErrors(cudaStreamSynchronize(NULL));
+  }
 
   // copy from host to device
   for (int i = 0; i < Nd; i++) {
@@ -462,7 +463,10 @@ void MPICommunicator::preDslash(void* fermion_in, int parity, int invert_flag) {
     recvBoundaryVector(i);
   }
 
-  checkCudaErrors(cudaStreamSynchronize(NULL));
+  // checkCudaErrors(cudaStreamSynchronize(NULL));
+  if (grid_x > 1 || grid_y > 1 || grid_z > 1 || grid_t > 1) {
+    checkCudaErrors(cudaStreamSynchronize(NULL));
+  }
   for (int i = 0; i < Nd; i++) {
     // recv Boundary
     sendBoundaryVector(i);
@@ -473,15 +477,14 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
   assert (dagger_flag == 0 || dagger_flag == 1);
 
   Complex h_flag;
-  Complex* d_flag_ptr;
+  // Complex* d_flag_ptr;
 
   double dagger_flag_double;
 
-
-  checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
+  // checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
 
   dagger_flag_double = (dagger_flag == 0) ? 1.0 : -1.0;
-  checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
+  // checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
   Complex* h_addr;
   Complex* d_addr;
@@ -562,7 +565,7 @@ void MPICommunicator::postDslash(void* fermion_out, int parity, int dagger_flag)
     }
   }
   // calc result
-  checkCudaErrors(cudaFree(d_flag_ptr));
+  // checkCudaErrors(cudaFree(d_flag_ptr));
 
   for (int i = 0; i < Nd; i++) 
   {
@@ -667,20 +670,20 @@ void MPICommunicator::sendVecBarrier(int direction) {
   }
 }
 
-// __device__ Complex d_flag_ptr;
+
 void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction, int parity, int invert_flag) { // add parameter  invert_flag,  0---->flag(1,0)  1--->flag(-1, 0)
   assert (invert_flag == 0 || invert_flag == 1);
 
-  Complex h_flag;
-  Complex* d_flag_ptr;
-  checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
-
-  if (invert_flag == 0) {
-    h_flag = Complex(1, 0);
-  } else {
-    h_flag = Complex(-1, 0);
-  }
-  checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
+  // Complex h_flag;
+  // Complex* d_flag_ptr;
+  // checkCudaErrors(cudaMalloc(&d_flag_ptr, sizeof(Complex)));
+  double dagger_flag_double = (invert_flag == 0) ? 1.0 : -1.0;
+  // if (invert_flag == 0) {
+  //   h_flag = Complex(1, 0);
+  // } else {
+  //   h_flag = Complex(-1, 0);
+  // }
+  // checkCudaErrors(cudaMemcpy(d_flag_ptr, &h_flag, sizeof(Complex), cudaMemcpyHostToDevice));
 
   // Complex* h_front_addr;
   // Complex* h_back_addr;
@@ -704,9 +707,9 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   // h_front_addr = getHostSendBufferAddr(FRONT, direction);
   d_front_addr = getSendBufferAddr(FRONT, direction);
 #ifdef QCU_COALESCING
-  void *args1[] = {&coalesced_gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
+  void *args1[] = {&coalesced_gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &dagger_flag_double};
 #else
-  void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &d_flag_ptr};
+  void *args1[] = {&gauge_, &fermion_in, &Lx_, &Ly_, &Lz_, &Lt_, &parity, &d_front_addr, &dagger_flag_double};
 #endif
   if (direction == T_DIRECTION && grid_t > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontT, subGridDim, blockDim, args1));
@@ -717,7 +720,12 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
   } else if (direction == X_DIRECTION && grid_x > 1) {
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferFrontX, subGridDim, blockDim, args1));
   }
-  checkCudaErrors(cudaDeviceSynchronize());
+  // if (grid_x > 1 && direction == X_DIRECTION 
+  //     || grid_y > 1 && direction == Y_DIRECTION
+  //     || grid_z > 1 && direction == Z_DIRECTION
+  //     || grid_t > 1 && direction == T_DIRECTION ) {
+  //   checkCudaErrors(cudaDeviceSynchronize());
+  // }
   // back
   // h_back_addr = getHostSendBufferAddr(BACK, direction);
   d_back_addr = getSendBufferAddr(BACK, direction);
@@ -733,8 +741,8 @@ void MPICommunicator::prepareFrontBoundaryVector(void* fermion_in, int direction
     checkCudaErrors(cudaLaunchKernel((void *)DslashTransferBackX, subGridDim, blockDim, args2));
   }
 
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaFree(d_flag_ptr));
+  // checkCudaErrors(cudaDeviceSynchronize());
+  // checkCudaErrors(cudaFree(d_flag_ptr));
 }
 
 void MPICommunicator::prepareGauge() {
@@ -947,10 +955,17 @@ void MPICommunicator::allocateBuffer() {
   int boundary_size;
   if (grid_x != 1) {
     boundary_size = Ly_ * Lz_ * Lt_ * Ns * Nc / 2;
-    h_send_front_vec[0] = new Complex[boundary_size];
-    h_send_back_vec[0] = new Complex[boundary_size];
-    h_recv_front_vec[0] = new Complex[boundary_size];
-    h_recv_back_vec[0] = new Complex[boundary_size];
+    // h_send_front_vec[0] = new Complex[boundary_size];
+    // h_send_back_vec[0] = new Complex[boundary_size];
+    // h_recv_front_vec[0] = new Complex[boundary_size];
+    // h_recv_back_vec[0] = new Complex[boundary_size];
+
+    // page-locked memory
+    checkCudaErrors(cudaMallocHost(&h_send_front_vec[0], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_send_back_vec[0], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_front_vec[0], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_back_vec[0], sizeof(Complex) * boundary_size));
+    // device addr
     checkCudaErrors(cudaMalloc(&d_send_front_vec[0], sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&d_send_back_vec[0], sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&d_recv_front_vec[0], sizeof(Complex) * boundary_size));
@@ -958,10 +973,16 @@ void MPICommunicator::allocateBuffer() {
   }
   if (grid_y != 1) {
     boundary_size = Lx_ * Lz_ * Lt_ * Ns * Nc / 2;
-    h_send_front_vec[1] = new Complex[boundary_size];
-    h_send_back_vec[1] = new Complex[boundary_size];
-    h_recv_front_vec[1] = new Complex[boundary_size];
-    h_recv_back_vec[1] = new Complex[boundary_size];
+    // h_send_front_vec[1] = new Complex[boundary_size];
+    // h_send_back_vec[1] = new Complex[boundary_size];
+    // h_recv_front_vec[1] = new Complex[boundary_size];
+    // h_recv_back_vec[1] = new Complex[boundary_size];
+    // page-locked memory
+    checkCudaErrors(cudaMallocHost(&h_send_front_vec[1], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_send_back_vec[1], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_front_vec[1], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_back_vec[1], sizeof(Complex) * boundary_size));
+    // device addr
     checkCudaErrors(cudaMalloc(&d_send_front_vec[1], sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&d_send_back_vec[1], sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&d_recv_front_vec[1], sizeof(Complex) * boundary_size));
@@ -969,10 +990,16 @@ void MPICommunicator::allocateBuffer() {
   }
   if (grid_z != 1) {
     boundary_size = Lx_ * Ly_ * Lt_ * Ns * Nc / 2;
-    h_send_front_vec[2] = new Complex[boundary_size];
-    h_send_back_vec[2] = new Complex[boundary_size];
-    h_recv_front_vec[2] = new Complex[boundary_size];
-    h_recv_back_vec[2] = new Complex[boundary_size];
+    // h_send_front_vec[2] = new Complex[boundary_size];
+    // h_send_back_vec[2] = new Complex[boundary_size];
+    // h_recv_front_vec[2] = new Complex[boundary_size];
+    // h_recv_back_vec[2] = new Complex[boundary_size];
+    // page-locked memory
+    checkCudaErrors(cudaMallocHost(&h_send_front_vec[2], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_send_back_vec[2], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_front_vec[2], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_back_vec[2], sizeof(Complex) * boundary_size));
+    // device addr
     checkCudaErrors(cudaMalloc(&d_send_front_vec[2], sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&d_send_back_vec[2], sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&d_recv_front_vec[2], sizeof(Complex) * boundary_size));
@@ -980,10 +1007,16 @@ void MPICommunicator::allocateBuffer() {
   }
   if (grid_t != 1) {
     boundary_size = Lx_ * Ly_ * Lz_ * Ns * Nc / 2;
-    h_send_front_vec[3] = new Complex[boundary_size];
-    h_send_back_vec[3] = new Complex[boundary_size];
-    h_recv_front_vec[3] = new Complex[boundary_size];
-    h_recv_back_vec[3] = new Complex[boundary_size];
+    // h_send_front_vec[3] = new Complex[boundary_size];
+    // h_send_back_vec[3] = new Complex[boundary_size];
+    // h_recv_front_vec[3] = new Complex[boundary_size];
+    // h_recv_back_vec[3] = new Complex[boundary_size];
+    // page-locked memory
+    checkCudaErrors(cudaMallocHost(&h_send_front_vec[3], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_send_back_vec[3], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_front_vec[3], sizeof(Complex) * boundary_size));
+    checkCudaErrors(cudaMallocHost(&h_recv_back_vec[3], sizeof(Complex) * boundary_size));
+    // device addr
     checkCudaErrors(cudaMalloc(&(d_send_front_vec[3]), sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&(d_send_back_vec[3]), sizeof(Complex) * boundary_size));
     checkCudaErrors(cudaMalloc(&(d_recv_front_vec[3]), sizeof(Complex) * boundary_size));
@@ -1004,40 +1037,64 @@ void MPICommunicator::calculateAdjacentProcess() {
 void MPICommunicator::freeBuffer() {
   checkCudaErrors(cudaFree(d_partial_result_buffer));
   if (grid_x != 1) {
-    delete h_send_front_vec[0];
-    delete h_send_back_vec[0];
-    delete h_recv_front_vec[0];
-    delete h_recv_back_vec[0];
+    // delete h_send_front_vec[0];
+    // delete h_send_back_vec[0];
+    // delete h_recv_front_vec[0];
+    // delete h_recv_back_vec[0];
+    // free page-locked memory
+    checkCudaErrors(cudaFreeHost(h_send_front_vec[0]));
+    checkCudaErrors(cudaFreeHost(h_send_back_vec[0]));
+    checkCudaErrors(cudaFreeHost(h_recv_front_vec[0]));
+    checkCudaErrors(cudaFreeHost(h_recv_back_vec[0]));
+
     checkCudaErrors(cudaFree(d_send_front_vec[0]));
     checkCudaErrors(cudaFree(d_send_back_vec[0]));
     checkCudaErrors(cudaFree(d_recv_front_vec[0]));
     checkCudaErrors(cudaFree(d_recv_back_vec[0]));
   }
   if (grid_y != 1) {
-    delete h_send_front_vec[1];
-    delete h_send_back_vec[1];
-    delete h_recv_front_vec[1];
-    delete h_recv_back_vec[1];
+    // delete h_send_front_vec[1];
+    // delete h_send_back_vec[1];
+    // delete h_recv_front_vec[1];
+    // delete h_recv_back_vec[1];
+    // free page-locked memory
+    checkCudaErrors(cudaFreeHost(h_send_front_vec[1]));
+    checkCudaErrors(cudaFreeHost(h_send_back_vec[1]));
+    checkCudaErrors(cudaFreeHost(h_recv_front_vec[1]));
+    checkCudaErrors(cudaFreeHost(h_recv_back_vec[1]));
+    
     checkCudaErrors(cudaFree(d_send_front_vec[1]));
     checkCudaErrors(cudaFree(d_send_back_vec[1]));
     checkCudaErrors(cudaFree(d_recv_front_vec[1]));
     checkCudaErrors(cudaFree(d_recv_back_vec[1]));
   }
   if (grid_z != 1) {
-    delete h_send_front_vec[2];
-    delete h_send_back_vec[2];
-    delete h_recv_front_vec[2];
-    delete h_recv_back_vec[2];
+    // delete h_send_front_vec[2];
+    // delete h_send_back_vec[2];
+    // delete h_recv_front_vec[2];
+    // delete h_recv_back_vec[2];
+    // free page-locked memory
+    checkCudaErrors(cudaFreeHost(h_send_front_vec[2]));
+    checkCudaErrors(cudaFreeHost(h_send_back_vec[2]));
+    checkCudaErrors(cudaFreeHost(h_recv_front_vec[2]));
+    checkCudaErrors(cudaFreeHost(h_recv_back_vec[2]));
+
     checkCudaErrors(cudaFree(d_send_front_vec[2]));
     checkCudaErrors(cudaFree(d_send_back_vec[2]));
     checkCudaErrors(cudaFree(d_recv_front_vec[2]));
     checkCudaErrors(cudaFree(d_recv_back_vec[2]));
   }
   if (grid_t != 1) {
-    delete h_send_front_vec[3];
-    delete h_send_back_vec[3];
-    delete h_recv_front_vec[3];
-    delete h_recv_back_vec[3];
+    // delete h_send_front_vec[3];
+    // delete h_send_back_vec[3];
+    // delete h_recv_front_vec[3];
+    // delete h_recv_back_vec[3];
+    // free page-locked memory
+    checkCudaErrors(cudaFreeHost(h_send_front_vec[3]));
+    checkCudaErrors(cudaFreeHost(h_send_back_vec[3]));
+    checkCudaErrors(cudaFreeHost(h_recv_front_vec[3]));
+    checkCudaErrors(cudaFreeHost(h_recv_back_vec[3]));
+
     checkCudaErrors(cudaFree(d_send_front_vec[3]));
     checkCudaErrors(cudaFree(d_send_back_vec[3]));
     checkCudaErrors(cudaFree(d_recv_front_vec[3]));

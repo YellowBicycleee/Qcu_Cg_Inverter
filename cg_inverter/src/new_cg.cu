@@ -16,6 +16,7 @@
 #define COALESCED_CG
 
 #define IGNORE_CLOVER
+// #define PAGE_LOCKED_MEM
 
 extern MPICommunicator *mpi_comm;
 extern void *qcu_gauge;
@@ -194,9 +195,6 @@ bool if_even_converge(void *current_x, void *current_b_buffer, void *target_b,
 
   int parity = 0;
 
-  // qcuCudaMemcpy(current_b_buffer, current_x,
-  //               sizeof(Complex) * half_vol * Ns * Nc,
-  //               cudaMemcpyDeviceToDevice);
   checkCudaErrors(cudaMemcpyAsync(current_b_buffer, current_x,
                                   sizeof(Complex) * half_vol * Ns * Nc,
                                   cudaMemcpyDeviceToDevice));

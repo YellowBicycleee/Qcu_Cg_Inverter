@@ -39,7 +39,7 @@ static __device__ __forceinline__ void storeVector(Complex* dst_local, void* fer
 
 
 
-__global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {
+__global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, double dagger_flag) {
   // 前传传结果
   int sub_Lx = (Lx >> 1);
   int sub_Ly = (Ly >> 1);
@@ -47,7 +47,6 @@ __global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int L
   int t = thread / (Lz * sub_Ly);
   int z = thread % (Lz * sub_Ly) / sub_Ly;
   int sub_y = thread % sub_Ly;
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   int new_even_odd = (z+t) & 0x01;
   Point p(sub_Lx-1, 2 * sub_y + (new_even_odd == 1-parity), z, t, 1-parity);
@@ -71,15 +70,15 @@ __global__ void DslashTransferFrontX(void *gauge, void *fermion_in,int Lx, int L
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] + flag * src_local[3 * Nc + j] * Complex(0, 1)) *
+      temp = (src_local[0 * Nc + j] + src_local[3 * Nc + j].multipy_i() * dagger_flag) *
             u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[0 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * Complex(0, -1) * flag;
+      dst_local[3 * Nc + i] += temp.multipy_minus_i() * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] + flag * src_local[2 * Nc + j] * Complex(0, 1)) *
+      temp = (src_local[1 * Nc + j] + src_local[2 * Nc + j].multipy_i() * dagger_flag) *
             u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[1 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * Complex(0, -1) * flag;
+      dst_local[2 * Nc + i] += temp.multipy_minus_i() * dagger_flag;
     }
   }
 
@@ -113,7 +112,7 @@ __global__ void DslashTransferBackX(void *fermion_in, int Lx, int Ly, int Lz, in
   // }
   storeVector(src_local, send_buffer, dst_p, 1, sub_Ly, Lz, Lt);
 }
-__global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {
+__global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, double dagger_flag) {
   // 前传传结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -122,7 +121,6 @@ __global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int L
   int x = thread % sub_Lx;
   Point p(x, Ly-1, z, t, 1-parity);
   Point dst_p(x, 0, z, t, 0); // parity is useless
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   Complex src_local[Ns * Nc];
   Complex u_local[Nc * Nc];
@@ -139,13 +137,13 @@ __global__ void DslashTransferFrontY(void *gauge, void *fermion_in,int Lx, int L
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - flag * src_local[3 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+      temp = (src_local[0 * Nc + j] - src_local[3 * Nc + j] * dagger_flag) * u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[0 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += -temp * flag;
+      dst_local[3 * Nc + i] += -temp * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] + flag * src_local[2 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+      temp = (src_local[1 * Nc + j] + src_local[2 * Nc + j] * dagger_flag) * u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[1 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * flag;
+      dst_local[2 * Nc + i] += temp * dagger_flag;
     }
   }
 
@@ -166,7 +164,7 @@ __global__ void DslashTransferBackY(void *fermion_in, int Lx, int Ly, int Lz, in
   storeVector(src_local, send_buffer, dst_p, sub_Lx, 1, Lz, Lt);
 }
 // DslashTransferFrontZ: DONE
-__global__ void DslashTransferFrontZ(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr) {
+__global__ void DslashTransferFrontZ(void *gauge, void *fermion_in,int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, double dagger_flag) {
   // 前传传结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -175,7 +173,6 @@ __global__ void DslashTransferFrontZ(void *gauge, void *fermion_in,int Lx, int L
   int x = thread % sub_Lx;
   Point p(x, y, Lz-1, t, 1-parity);
   Point dst_p(x, y, 0, t, 0); // parity is useless
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   Complex* dst_ptr;
 
@@ -194,15 +191,15 @@ __global__ void DslashTransferFrontZ(void *gauge, void *fermion_in,int Lx, int L
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] + flag * src_local[2 * Nc + j] * Complex(0, 1)) *
+      temp = (src_local[0 * Nc + j] + src_local[2 * Nc + j].multipy_i() * dagger_flag) *
              u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * Complex(0, -1) * flag;
+      dst_local[2 * Nc + i] += temp.multipy_minus_i() * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - flag * src_local[3 * Nc + j] * Complex(0, 1)) *
+      temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j].multipy_i() * dagger_flag) *
              u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * Complex(0, 1) * flag;
+      dst_local[3 * Nc + i] += temp.multipy_i() * dagger_flag;
     }
   }
 
@@ -225,7 +222,7 @@ __global__ void DslashTransferBackZ(void *fermion_in, int Lx, int Ly, int Lz, in
 }
 
 // DslashTransferFrontT: Done
-__global__ void DslashTransferFrontT(void *gauge, void *fermion_in, int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, void* flag_ptr){
+__global__ void DslashTransferFrontT(void *gauge, void *fermion_in, int Lx, int Ly, int Lz, int Lt, int parity, Complex* send_buffer, double dagger_flag){
   // 前传传结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -234,7 +231,6 @@ __global__ void DslashTransferFrontT(void *gauge, void *fermion_in, int Lx, int 
   int x = thread % sub_Lx;
   Point p(x, y, z, Lt-1, 1-parity);
   Point dst_p(x, y, z, 0, 0); // parity is useless
-  Complex flag = *(static_cast<Complex*>(flag_ptr));
 
   Complex src_local[Ns * Nc];
   Complex u_local[Nc * Nc];
@@ -249,13 +245,13 @@ __global__ void DslashTransferFrontT(void *gauge, void *fermion_in, int Lx, int 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] + flag * src_local[2 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+      temp = (src_local[0 * Nc + j] + src_local[2 * Nc + j] * dagger_flag) * u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * flag;
+      dst_local[2 * Nc + i] += temp * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] + flag * src_local[3 * Nc + j]) * u_local[j * Nc + i].conj(); // transpose and conj
+      temp = (src_local[1 * Nc + j] + src_local[3 * Nc + j] * dagger_flag) * u_local[j * Nc + i].conj(); // transpose and conj
       dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * flag;
+      dst_local[3 * Nc + i] += temp * dagger_flag;
     }
   }
 
@@ -305,7 +301,7 @@ __global__ void calculateBackBoundaryX(void *fermion_out, int Lx, int Ly, int Lz
 
   storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
-__global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
+__global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag) {
   int sub_Lx = (Lx >> 1);
   int sub_Ly = (Ly >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;   // 注意这里乘以2
@@ -330,13 +326,13 @@ __global__ void calculateFrontBoundaryX(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] - src_local[3 * Nc + j].multipy_i() * dagger_flag) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * Complex(0, 1) * dagger_flag_double;
+      dst_local[3 * Nc + i] += temp.multipy_i() * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j].multipy_i() * dagger_flag) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * Complex(0, 1) * dagger_flag_double;
+      dst_local[2 * Nc + i] += temp.multipy_i() * dagger_flag;
     }
   }
 
@@ -365,7 +361,7 @@ __global__ void calculateBackBoundaryY(void *fermion_out, int Lx, int Ly, int Lz
   storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
-__global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
+__global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag) {
   // 后接接结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -388,13 +384,13 @@ __global__ void calculateFrontBoundaryY(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] + src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] + src_local[3 * Nc + j] * dagger_flag) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * dagger_flag_double;
+      dst_local[3 * Nc + i] += temp * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] - src_local[2 * Nc + j] * dagger_flag) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += -temp * dagger_flag_double;
+      dst_local[2 * Nc + i] += -temp * dagger_flag;
     }
   }
 
@@ -423,7 +419,7 @@ __global__ void calculateBackBoundaryZ(void *fermion_out, int Lx, int Ly, int Lz
   storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
-__global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
+__global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag) {
   // 后接接结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -446,13 +442,13 @@ __global__ void calculateFrontBoundaryZ(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j].multipy_i() * dagger_flag) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += temp * Complex(0, 1) * dagger_flag_double;
+      dst_local[2 * Nc + i] += temp.multipy_i() * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] + src_local[3 * Nc + j] * dagger_flag_double * Complex(0, 1)) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] + src_local[3 * Nc + j].multipy_i() * dagger_flag) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += temp * Complex(0, -1) * dagger_flag_double;
+      dst_local[3 * Nc + i] += temp.multipy_minus_i() * dagger_flag;
     }
   }
 
@@ -482,7 +478,7 @@ __global__ void calculateBackBoundaryT(void *fermion_out, int Lx, int Ly, int Lz
   storeVector(dst_local, fermion_out, p, sub_Lx, Ly, Lz, Lt);
 }
 
-__global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag_double) {
+__global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, int Ly, int Lz, int Lt, int parity, Complex* recv_buffer, double dagger_flag) {
   // 后接接结果
   int sub_Lx = (Lx >> 1);
   int thread = blockIdx.x * blockDim.x + threadIdx.x;
@@ -505,13 +501,13 @@ __global__ void calculateFrontBoundaryT(void* gauge, void *fermion_out, int Lx, 
   for (int i = 0; i < Nc; i++) {
     for (int j = 0; j < Nc; j++) {
       // first row vector with col vector
-      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+      temp = (src_local[0 * Nc + j] - src_local[2 * Nc + j] * dagger_flag) * u_local[i * Nc + j];
       dst_local[0 * Nc + i] += temp;
-      dst_local[2 * Nc + i] += -temp * dagger_flag_double;
+      dst_local[2 * Nc + i] += -temp * dagger_flag;
       // second row vector with col vector
-      temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag_double) * u_local[i * Nc + j];
+      temp = (src_local[1 * Nc + j] - src_local[3 * Nc + j] * dagger_flag) * u_local[i * Nc + j];
       dst_local[1 * Nc + i] += temp;
-      dst_local[3 * Nc + i] += -temp * dagger_flag_double;
+      dst_local[3 * Nc + i] += -temp * dagger_flag;
     }
   }
 

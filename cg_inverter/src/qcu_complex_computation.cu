@@ -283,13 +283,13 @@ void gpu_vector_norm2(void *vector, void *temp_res, int vector_length,
   int grid_size = (vector_length + block_size - 1) / block_size;
 
   norm2_gpu<<<grid_size, block_size>>>(vector, temp_res, vector_length, result);
-  checkCudaErrors(cudaDeviceSynchronize());
+  // checkCudaErrors(cudaDeviceSynchronize());
   // reduce
   reduce_norm2_gpu<<<1, block_size>>>(temp_res, grid_size);
-  checkCudaErrors(cudaDeviceSynchronize());
+  // checkCudaErrors(cudaDeviceSynchronize());
   double square_norm2;
   double res;
-  checkCudaErrors(cudaMemcpy(&square_norm2, temp_res, sizeof(double),
+  checkCudaErrors(cudaMemcpyAsync(&square_norm2, temp_res, sizeof(double),
                              cudaMemcpyDeviceToHost));
   res = sqrt(square_norm2);
   checkCudaErrors(
